@@ -1,0 +1,137 @@
+.page-section {
+    padding-top: 20px;
+}
+
+.d-none {
+    display: none !important;
+}
+
+.list-group-item-action:hover {
+    background-color: #f8f9fa;
+}
+
+.item-checked {
+    text-decoration: line-through;
+    color: #6c757d;
+}
+
+.area-group-header {
+    background-color: #e9ecef;
+    padding: 10px;
+    font-weight: bold;
+    border-radius: 4px;
+    margin-top: 15px;
+}
+
+.product-item-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 15px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.product-item-row:last-child {
+    border-bottom: none;
+}
+
+.product-item-checkbox {
+    margin-right: 15px;
+}
+
+.product-item-name {
+    flex-grow: 1;
+}
+
+.product-item-delete {
+    color: #dc3545;
+    cursor: pointer;
+}
+
+.history-item {
+    cursor: pointer;
+}
+
+.page-section {
+    padding-top: 20px;
+}
+
+.d-none {
+    display: none !important;
+}
+
+.list-group-item-action:hover {
+    background-color: #f8f9fa;
+}
+
+.item-checked {
+    text-decoration: line-through;
+    color: #6c757d;
+}
+
+.area-group-header {
+    background-color: #e9ecef;
+    padding: 10px;
+    font-weight: bold;
+    border-radius: 4px;
+    margin-top: 15px;
+}
+
+.product-item-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 15px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.product-item-row:last-child {
+    border-bottom: none;
+}
+
+.product-item-checkbox {
+    margin-right: 15px;
+}
+
+.product-item-name {
+    flex-grow: 1;
+}
+
+.product-item-delete {
+    color: #dc3545;
+    cursor: pointer;
+}
+
+.history-item {
+    cursor: pointer;
+}
+
+.history-item:hover {
+    background-color: #f8f9fa;
+}
+
+.edit-input {
+    width: 100%;
+    padding: 2px 5px;
+    font-size: inherit;
+    border: 1px solid #0d6efd;
+    border-radius: 4px;
+}
+
+.edit-icon {
+    cursor: pointer;
+    color: #6c757d;
+    margin-left: 10px;
+    font-size: 1.2rem;
+}
+
+.edit-icon:hover {
+    color: #0d6efd;
+}
+
+/* Navigation highlighting */
+.nav-link.active-page {
+    background-color: #ffffff;
+    color: #0d6efd !important;
+    font-size: 1.2rem;
+    border-radius: 4px;
+    font-weight: bold;
+}
