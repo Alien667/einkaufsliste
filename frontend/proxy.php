@@ -2,6 +2,10 @@
 /**
  * Kleiner PHP-Proxy zur Umleitung von Frontend-Anfragen an ein lokales Backend.
  * Verhindert CORS-Probleme, da das Frontend mit dem Proxy auf derselben Domain kommuniziert.
+ * 
+ * ANWEISUNG FÜR DAS FRONTEND:
+ * Um diesen Proxy zu nutzen, ändern Sie die 'API_BASE_URL' in Ihren JavaScript-Dateien 
+ * (z.B. app.js, users.js) von 'http://localhost:8000' zu '/proxy.php/'.
  */
 
 // --- KONFIGURATION ---
@@ -11,14 +15,22 @@ $backend_base_url = 'http://localhost:8000';
 // --- LOGIK ---
 
 // 1. Den Ziel-Pfad ermitteln
-// Wir nehmen die aktuelle URI und entfernen den Namen der Proxy-Datei selbst
 $request_uri = $_SERVER['REQUEST_URI'];
 $proxy_file = basename(__FILE__);
 
-// Wir extrahieren den Pfad nach der proxy.php
-// Beispiel: /index.html/proxy.php/areas -> /areas
-$path_parts = explode($proxy_file, $request_uri);
-$relative_path = isset($path_parts[1]) ? $path_parts[1] : '';
+// Wir entfernen den Namen der Proxy-Datei aus der URI, um den eigentlichen Zielpfad zu erhalten.
+// Beispiel: /proxy.php/api/login -> /api/login
+if (strpos($request_uri, $proxy_file) !== false) {
+    $relative_path = str_replace($proxy_file, '', $request_uri);
+} else {
+    // Falls die Datei nicht in der URI vorkommt (z.B. durch Server-Routing)
+    $relative_path = $request_uri;
+}
+
+// Sicherstellen, dass der Pfad mit einem / beginnt, falls er nicht leer ist
+if ($relative_path !== '' && $relative_path[0] !== '/') {
+    $relative_path = '/' . $relative_path;
+}
 
 $target_url = $backend_base_url . $relative_path;
 
