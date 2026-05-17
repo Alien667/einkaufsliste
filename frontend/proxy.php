@@ -5,7 +5,7 @@
  * 
  * ANWEISUNG FÜR DAS FRONTEND:
  * Um diesen Proxy zu nutzen, ändern Sie die 'API_BASE_URL' in Ihren JavaScript-Dateien 
- * (z.B. app.js, users.js) von 'http://localhost:8000' zu '/proxy.php/'.
+ * (z.B. app.js, users.js) von 'http://localhost:8000' zu '/proxy.php'.
  */
 
 // --- KONFIGURATION ---
@@ -18,18 +18,25 @@ $backend_base_url = 'http://localhost:8000';
 $request_uri = $_SERVER['REQUEST_URI'];
 $proxy_file = basename(__FILE__);
 
-// Wir entfernen den Namen der Proxy-Datei aus der URI, um den eigentlichen Zielpfad zu erhalten.
-// Beispiel: /proxy.php/api/login -> /api/login
-if (strpos($request_uri, $proxy_file) !== false) {
-    $relative_path = str_replace($proxy_file, '', $request_uri);
+// Wir suchen die Position der proxy.php in der URI
+$pos = strpos($request_uri, $proxy_file);
+
+if ($pos !== false) {
+    // Wir nehmen alles, was NACH der proxy.php kommt
+    $relative_path = substr($request_uri, $pos + strlen($proxy_file));
 } else {
-    // Falls die Datei nicht in der URI vorkommt (z.B. durch Server-Routing)
+    // Falls die Datei nicht in der URI vorkommt
     $relative_path = $request_uri;
 }
 
 // Sicherstellen, dass der Pfad mit einem / beginnt, falls er nicht leer ist
 if ($relative_path !== '' && $relative_path[0] !== '/') {
     $relative_path = '/' . $relative_path;
+}
+
+// Falls der Pfad nach der proxy.php leer ist (nur /proxy.php), behandeln wir ihn als Root-Pfad
+if ($relative_path === '') {
+    $relative_path = '/';
 }
 
 $target_url = $backend_base_url . $relative_path;
@@ -70,7 +77,10 @@ curl_close($ch);
 
 if ($error) {
     http_response_code(502); // Bad Gateway
-    echo json_encode(['error' => 'Proxy Error: ' . $error]);
+    echo json_encode([
+        'error' => 'Proxy Error: ' . $error,
+        'debug_target_url' => $target_url
+    ]);
     exit;
 }
 
