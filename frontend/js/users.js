@@ -1,4 +1,4 @@
-const API_BASE_URL = '/proxy.php/';
+const API_BASE_URL = './proxy.php';
 //const API_BASE_URL = 'http://localhost:8000';
 
 // State management
