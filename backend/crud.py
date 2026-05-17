@@ -4,37 +4,37 @@ from . import models, schemas
 
 # --- Area CRUD ---
 
-def get_areas(db: Session):
-    return db.query(models.Area).order_by(models.Area.position).all()
+def get_areas(db: Session, account_id: int):
+    return db.query(models.Area).filter(models.Area.account_id == account_id).order_by(models.Area.position).all()
 
-def create_area(db: Session, area: schemas.AreaCreate):
+def create_area(db: Session, area: schemas.AreaCreate, account_id: int):
     # Get the next position
-    last_area = db.query(models.Area).order_by(models.Area.position.desc()).first()
+    last_area = db.query(models.Area).filter(models.Area.account_id == account_id).order_by(models.Area.position.desc()).first()
     new_position = (last_area.position + 1) if last_area else 0
 
-    db_area = models.Area(name=area.name, position=new_position)
+    db_area = models.Area(name=area.name, position=new_position, account_id=account_id)
     db.add(db_area)
     db.commit()
     db.refresh(db_area)
     return db_area
 
-def delete_area(db: Session, area_id: int):
-    db_area = db.query(models.Area).filter(models.Area.id == area_id).first()
+def delete_area(db: Session, area_id: int, account_id: int):
+    db_area = db.query(models.Area).filter(models.Area.id == area_id, models.Area.account_id == account_id).first()
     if db_area:
         db.delete(db_area)
         db.commit()
     return db_area
 
-def update_area(db: Session, area_id: int, name: str):
-    db_area = db.query(models.Area).filter(models.Area.id == area_id).first()
+def update_area(db: Session, area_id: int, name: str, account_id: int):
+    db_area = db.query(models.Area).filter(models.Area.id == area_id, models.Area.account_id == account_id).first()
     if db_area:
         db_area.name = name
         db.commit()
         db.refresh(db_area)
     return db_area
 
-def update_product(db: Session, product_id: int, name: str, area_id: int):
-    db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
+def update_product(db: Session, product_id: int, name: str, area_id: int, account_id: int):
+    db_product = db.query(models.Product).filter(models.Product.id == product_id, models.Product.account_id == account_id).first()
     if db_product:
         db_product.name = name
         db_product.area_id = area_id
@@ -42,25 +42,25 @@ def update_product(db: Session, product_id: int, name: str, area_id: int):
         db.refresh(db_product)
     return db_product
 
-def update_areas_order(db: Session, area_ids: List[int]):
+def update_areas_order(db: Session, area_ids: List[int], account_id: int):
     for index, area_id in enumerate(area_ids):
-        db.query(models.Area).filter(models.Area.id == area_id).update({"position": index})
+        db.query(models.Area).filter(models.Area.id == area_id, models.Area.account_id == account_id).update({"position": index})
     db.commit()
 
 # --- Product CRUD ---
 
-def get_products(db: Session):
-    return db.query(models.Product).all()
+def get_products(db: Session, account_id: int):
+    return db.query(models.Product).filter(models.Product.account_id == account_id).all()
 
-def create_product(db: Session, product: schemas.ProductCreate):
-    db_product = models.Product(**product.model_dump())
+def create_product(db: Session, product: schemas.ProductCreate, account_id: int):
+    db_product = models.Product(**product.model_dump(), account_id=account_id)
     db.add(db_product)
     db.commit()
     db.refresh(db_product)
     return db_product
 
-def delete_product(db: Session, product_id: int):
-    db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
+def delete_product(db: Session, product_id: int, account_id: int):
+    db_product = db.query(models.Product).filter(models.Product.id == product_id, models.Product.account_id == account_id).first()
     if db_product:
         db.delete(db_product)
         db.commit()
@@ -68,23 +68,23 @@ def delete_product(db: Session, product_id: int):
 
 # --- ShoppingTrip CRUD ---
 
-def create_trip(db: Session):
-    db_trip = models.ShoppingTrip()
+def create_trip(db: Session, account_id: int):
+    db_trip = models.ShoppingTrip(account_id=account_id)
     db.add(db_trip)
     db.commit()
     db.refresh(db_trip)
     return db_trip
 
-def get_trips(db: Session, archived: bool = False):
-    query = db.query(models.ShoppingTrip).filter(models.ShoppingTrip.is_archived == archived)
+def get_trips(db: Session, account_id: int, archived: bool = False):
+    query = db.query(models.ShoppingTrip).filter(models.ShoppingTrip.account_id == account_id, models.ShoppingTrip.is_archived == archived)
     query = query.options(joinedload(models.ShoppingTrip.items))
     return query.order_by(models.ShoppingTrip.created_at.desc()).all()
 
-def get_trip(db: Session, trip_id: int):
-    return db.query(models.ShoppingTrip).filter(models.ShoppingTrip.id == trip_id).first()
+def get_trip(db: Session, trip_id: int, account_id: int):
+    return db.query(models.ShoppingTrip).filter(models.ShoppingTrip.id == trip_id, models.ShoppingTrip.account_id == account_id).first()
 
-def archive_trip(db: Session, trip_id: int):
-    db_trip = db.query(models.ShoppingTrip).filter(models.ShoppingTrip.id == trip_id).first()
+def archive_trip(db: Session, trip_id: int, account_id: int):
+    db_trip = db.query(models.ShoppingTrip).filter(models.ShoppingTrip.id == trip_id, models.ShoppingTrip.account_id == account_id).first()
     if db_trip:
         db_trip.is_archived = True
         db.commit()
@@ -92,26 +92,26 @@ def archive_trip(db: Session, trip_id: int):
 
 # --- ShoppingListItem CRUD ---
 
-def create_list_item(db: Session, item: schemas.ShoppingListItemCreate):
-    db_item = models.ShoppingListItem(**item.model_dump())
+def create_list_item(db: Session, item: schemas.ShoppingListItemCreate, account_id: int):
+    db_item = models.ShoppingListItem(**item.model_dump(), account_id=account_id)
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
     return db_item
 
-def get_items_for_trip(db: Session, trip_id: int):
-    return db.query(models.ShoppingListItem).filter(models.ShoppingListItem.trip_id == trip_id).all()
+def get_items_for_trip(db: Session, trip_id: int, account_id: int):
+    return db.query(models.ShoppingListItem).filter(models.ShoppingListItem.trip_id == trip_id, models.ShoppingListItem.account_id == account_id).all()
 
-def update_item_check(db: Session, item_id: int, is_checked: bool):
-    db_item = db.query(models.ShoppingListItem).filter(models.ShoppingListItem.id == item_id).first()
+def update_item_check(db: Session, item_id: int, is_checked: bool, account_id: int):
+    db_item = db.query(models.ShoppingListItem).filter(models.ShoppingListItem.id == item_id, models.ShoppingListItem.account_id == account_id).first()
     if db_item:
         db_item.is_checked = is_checked
         db.commit()
         db.refresh(db_item)
     return db_item
 
-def delete_item(db: Session, item_id: int):
-    db_item = db.query(models.ShoppingListItem).filter(models.ShoppingListItem.id == item_id).first()
+def delete_item(db: Session, item_id: int, account_id: int):
+    db_item = db.query(models.ShoppingListItem).filter(models.ShoppingListItem.id == item_id, models.ShoppingListItem.account_id == account_id).first()
     if db_item:
         db.delete(db_item)
         db.commit()

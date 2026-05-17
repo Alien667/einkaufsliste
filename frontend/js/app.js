@@ -1,22 +1,119 @@
 const API_BASE_URL = 'http://localhost:8000';
-//const API_BASE_URL = './proxy.php';
 
 // State management
 let currentTripId = null;
 let areas = [];
 let products = [];
 let trips = [];
+let authToken = localStorage.getItem('authToken');
+let isSuperuser = localStorage.getItem('isSuperuser') === 'true';
 
 // Bootstrap Modals
-let areaModal, productModal, spontaneousModal;
+let areaModal, productModal, spontaneousModal, accountModal;
 
 document.addEventListener('DOMContentLoaded', () => {
     areaModal = new bootstrap.Modal(document.getElementById('areaModal'));
     productModal = new bootstrap.Modal(document.getElementById('productModal'));
     spontaneousModal = new bootstrap.Modal(document.getElementById('spontaneousModal'));
-    
-    showPage('config-areas');
+    accountModal = new bootstrap.Modal(document.getElementById('accountModal'));
+
+    initApp();
 });
+
+function initApp() {
+    if (authToken) {
+        showApp();
+    } else {
+        showAuth();
+    }
+
+    // Setup form submissions
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
+    }
+
+    const registerForm = document.getElementById('register-form');
+    if (registerForm) {
+        registerForm.addEventListener('submit', handleRegister);
+    }
+}
+
+function showApp() {
+    document.getElementById('auth-section').style.display = 'none';
+    document.getElementById('main-navbar').style.display = 'block';
+    document.getElementById('main-app-container').style.display = 'block';
+    showPage('current-trip');
+}
+
+function showAuth() {
+    document.getElementById('auth-section').style.display = 'block';
+    document.getElementById('main-navbar').style.display = 'none';
+    document.getElementById('main-app-container').style.display = 'none';
+}
+
+function toggleAuthMode() {
+    const loginContainer = document.getElementById('login-form-container');
+    const registerContainer = document.getElementById('register-form-container');
+    loginContainer.classList.toggle('d-none');
+    registerContainer.classList.toggle('d-none');
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+
+    try {
+        const formData = new FormData();
+        formData.append('username', email);
+        formData.append('password', password);
+
+        const response = await fetch(`${API_BASE_URL}/login`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Login fehlgeschlagen');
+        }
+
+        const data = await response.json();
+        authToken = data.access_token;
+        localStorage.setItem('authToken', authToken);
+        showApp();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function handleRegister(e) {
+    e.preventDefault();
+    const firstname = document.getElementById('reg-firstname').value;
+    const lastname = document.getElementById('reg-lastname').value;
+    const email = document.getElementById('reg-email').value;
+    const password = document.getElementById('reg-password').value;
+
+    try {
+        await apiRequest('/register', 'POST', {
+            first_name: firstname,
+            last_name: lastname,
+            email: email,
+            password: password
+        });
+        alert('Registrierung erfolgreich! Bitte jetzt anmelden.');
+        toggleAuthMode();
+    } catch (err) {
+        alert('Registrierung fehlgeschlagen: ' + err.message);
+    }
+}
+
+function logout() {
+    authToken = null;
+    localStorage.removeItem('authToken');
+    location.reload();
+}
 
 // --- Navigation ---
 
@@ -66,6 +163,11 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
             'Content-Type': 'application/json',
         }
     };
+
+    if (authToken) {
+        options.headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
     if (body) {
         options.body = JSON.stringify(body);
     }
@@ -74,6 +176,13 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
         if (!response.ok) {
             const errorData = await response.json();
+            // If unauthorized, clear token and redirect to login
+            if (response.status === 401) {
+                authToken = null;
+                localStorage.removeItem('authToken');
+                showAuth();
+                throw new Error('Sitzung abgelaufen. Bitte erneut anmelden.');
+            }
             throw new Error(errorData.detail || 'API Error');
         }
         return await response.json();
@@ -249,7 +358,7 @@ async function startEditProduct(id, iconElement) {
     const container = iconElement.parentElement;
     const nameSpan = container.querySelector('.product-name');
     const oldName = nameSpan.innerText;
-    
+
     // Find the product object
     const product = products.find(p => p.id === id);
     if (!product) return;
@@ -270,9 +379,9 @@ async function startEditProduct(id, iconElement) {
         const newName = inputEl.value.trim();
         if (newName && newName !== oldName) {
             try {
-                await apiRequest(`/products/${id}`, 'PUT', { 
-                    name: newName, 
-                    area_id: product.area_id 
+                await apiRequest(`/products/${id}`, 'PUT', {
+                    name: newName,
+                    area_id: product.area_id
                 });
                 loadProductsAndAreas();
             } catch (err) {
@@ -354,7 +463,7 @@ async function prepareTripCreation() {
 function renderTripCreationForm() {
     const productContainer = document.getElementById('selection-products');
 
-    productContainer.innerHTML = '<h5 class="mb-3">Waren auswählen</h5>';
+    productContainer.innerHTML = '<h5 class="mb-3">Waren auswählen</h</h5>';
 
     areas.forEach(area => {
         const areaProducts = products.filter(p => p.area_id === area.id);
@@ -424,7 +533,6 @@ async function loadCurrentTrip() {
         completeBtn.classList.remove('d-none');
 
         // Re-render the dynamic parts of the container
-        // We don't include the heading here because it's already in the section in index.html
         container.innerHTML = `
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="h6">Spontane Ware hinzufügen</h5>
@@ -552,7 +660,7 @@ async function loadTripHistory() {
         const detail = document.getElementById('history-detail');
         detail.classList.add('d-none');
         list.classList.remove('d-none');
-        
+
         list.innerHTML = '';
         if (trips.length === 0) {
             list.innerHTML = '<p class="text-muted">Noch keine abgeschlossenen Einkäufe.</p>';
@@ -588,7 +696,7 @@ async function viewTripDetail(tripId) {
         detail.classList.remove('d-none');
 
         detailsContainer.innerHTML = '';
-        
+
         // Grouping
         const grouped = {};
         trip.items.forEach(item => {

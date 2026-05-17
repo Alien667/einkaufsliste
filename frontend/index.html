@@ -9,9 +9,9 @@
 </head>
 <body class="bg-light">
 
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4" id="main-navbar" style="display: none;">
         <div class="container">
-            <a class="navbar-brand" href="#">Einkaufsliste</a>
+            <a class="navbar-brand" href="#" onclick="showPage('current-trip')">Einkaufsliste</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -32,16 +32,79 @@
                     <li class="nav-item">
                         <a class="nav-link" href="#" onclick="showPage('trip-history')" data-page-id="trip-history">Verlauf</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="users.html">Nutzer</a>
+                    </li>
+                    <li class="nav-item admin-only d-none">
+                        <a class="nav-link" href="#" onclick="showPage('admin-accounts')" data-page-id="admin-accounts">Accounts (Admin)</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="logout()">Abmelden</a>
+                    </li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <div class="container">
+    <div class="container mt-5" id="auth-section" style="display: none;">
+        <div class="row justify-content-center">
+            <div class="col-md-5">
+                <div class="card shadow">
+                    <div class="card-body p-4">
+                        <div id="login-form-container">
+                            <h3 class="text-center mb-4">Login</h3>
+                            <form id="login-form">
+                                <div class="mb-3">
+                                    <label class="form-label">E-Mail</label>
+                                    <input type="email" class="form-control" id="login-email" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Passwort</label>
+                                    <input type="password" class="form-control" id="login-password" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Anmelden</button>
+                            </form>
+                            <hr>
+                            <p class="text-center mb-0">Noch kein Account? <a href="#" onclick="toggleAuthMode()">Registrieren</a></p>
+                        </div>
+
+                        <div id="register-form-container" class="d-none">
+                            <h3 class="text-center mb-4">Registrierung</h3>
+                            <form id="register-form">
+                                <div class="mb-3">
+                                    <label class="form-label">Vorname</label>
+                                    <input type="text" class="form-control" id="reg-firstname" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Nachname</label>
+                                    <input type="text" class="form-control" id="reg-lastname" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">E-Mail</label>
+                                    <input type="email" class="form-control" id="reg-email" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Passwort</label>
+                                    <input type="password" class="form-control" id="reg-password" required>
+                                </div>
+                                <button type="submit" class="btn btn-success w-100">Konto erstellen</button>
+                            </form>
+                            <hr>
+                            <p class="text-center mb-0">Bereits Account? <a href="#" onclick="toggleAuthMode()">Login</a></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" id="main-app-container" style="display: none;">
         <!-- Page 1: Konfiguration der Bereiche -->
         <section id="config-areas" class="page-section d-none">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2>Bereiche konfigurieren</h2>
+                <h2 class="h4">Bereiche konfigurieren</h2>
                 <button class="btn btn-success" onclick="openAreaModal()">+ Bereich hinzufügen</button>
             </div>
             <div id="areas-list" class="list-group">
@@ -52,7 +115,7 @@
         <!-- Page 2: Waren zuordnen -->
         <section id="config-products" class="page-section d-none">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2>Waren verwalten</h2>
+                <h2 class="h4">Waren verwalten</h2>
                 <button class="btn btn-success" onclick="openProductModal()">+ Ware hinzufügen</button>
             </div>
             <div id="products-list" class="list-group">
@@ -62,7 +125,7 @@
 
         <!-- Page 3: Erstellung der Einkaufsliste -->
         <section id="create-trip" class="page-section d-none">
-            <h2>Neuen Einkauf erstellen</h2>
+            <h2 class="h4">Neuen Einkauf erstellen</h2>
             <p class="text-muted">Wähle die Waren aus, die du heute einkaufen möchtest.</p>
             <div id="trip-creation-form">
                 <div id="selection-products" class="mt-4">
@@ -77,13 +140,13 @@
         <!-- Page 4: Aktuelle Einkaufsliste -->
         <section id="current-trip" class="page-section d-none">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2>Aktueller Einkauf</h2>
+                <h2 class="h4">Aktueller Einkauf</h2>
                 <button class="btn btn-danger" id="complete-trip-btn" onclick="completeTrip()">Einkauf abschließen</button>
             </div>
             <div id="active-trip-content">
                 <!-- Active trip items will be loaded here -->
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5>Spontane Ware hinzufügen</h5>
+                    <h5 class="h6">Spontane Ware hinzufügen</h5>
                     <button class="btn btn-sm btn-outline-secondary" onclick="openSpontaneousProductModal()">+</button>
                 </div>
                 <div id="spontaneous-product-container"></div>
@@ -95,20 +158,49 @@
 
         <!-- Page 5: Übersicht abgeschlossener Einkäufe -->
         <section id="trip-history" class="page-section d-none">
-            <h2>Verlauf</h2>
+            <h2 class="h4">Verlauf</h2>
             <div id="history-list" class="list-group">
                 <!-- History list -->
             </div>
             <hr>
             <div id="history-detail" class="d-none">
-                <h3>Detailansicht</h3>
+                <h3 class="h5">Detailansicht</h3>
                 <div id="history-item-details"></div>
                 <button class="btn btn-secondary mt-3" onclick="hideHistoryDetail()">Zurück zum Verlauf</button>
+            </div>
+        </section>
+
+        <!-- Page 6: Admin Accounts -->
+        <section id="admin-accounts" class="page-section d-none">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h4">Accounts verwalten (Admin)</h2>
+                <button class="btn btn-success" onclick="openAccountModal()">+ Account hinzufügen</button>
+            </div>
+            <div id="accounts-list" class="list-group">
+                <!-- Accounts will be loaded here -->
             </div>
         </section>
     </div>
 
     <!-- Modals -->
+    <!-- Account Modal -->
+    <div class="modal fade" id="accountModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Account hinzufügen</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="text" id="accountNameInput" class="form-control" placeholder="Name des Accounts">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="button" class="btn btn-primary" onclick="saveAdminAccount()">Speichern</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- Area Modal -->
     <div class="modal fade" id="areaModal" tabindex="-1">
         <div class="modal-dialog">

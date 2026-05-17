@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 from datetime import datetime
 
@@ -13,9 +13,13 @@ class AreaCreate(AreaBase):
 
 class Area(AreaBase):
     id: int
+    account_id: int
 
     class Config:
         from_attributes = True
+
+class ReorderAreas(BaseModel):
+    area_ids: List[int]
 
 # --- Product Schemas ---
 
@@ -28,6 +32,7 @@ class ProductCreate(ProductBase):
 
 class Product(ProductBase):
     id: int
+    account_id: int
 
     class Config:
         from_attributes = True
@@ -44,6 +49,7 @@ class ShoppingTrip(ShoppingTripBase):
     id: int
     created_at: datetime
     is_archived: bool
+    account_id: int
 
     class Config:
         from_attributes = True
@@ -64,6 +70,7 @@ class ShoppingListItem(ShoppingListItemBase):
     trip_id: int
     product_id: Optional[int] = None
     area_id: Optional[int] = None
+    account_id: int
 
     class Config:
         from_attributes = True
@@ -75,3 +82,7 @@ class TripWithItems(ShoppingTrip):
 
 class AreaWithProducts(Area):
     products: List[Product]
+
+# --- Auth Schemas ---
+
+from .auth_schemas import Token, TokenData, LoginRequest, UserResponse, UserCreate, Account

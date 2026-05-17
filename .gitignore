@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+.qwen/
+.idea/
+backend/auth.db
+backend/shopping_list.db

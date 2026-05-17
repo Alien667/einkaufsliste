@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nutzerverwaltung</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-light">
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">Einkaufsliste</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html">Zur App</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class            class="container">
+        <div class="row">
+            <!-- User Management Form -->
+            <div class="col-md-4">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Neuen Nutzer anlegen</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="user-create-form">
+                            <div class="mb-3">
+                                <label class="form-label">Vorname</label>
+                                <input type="text" class="form-control" id="user-firstname" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Nachname</label>
+                                <input type="text" class="form-control" id="user-lastname" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">E-Mail</label>
+                                <input type="email" class="form-control" id="user-email" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Passwort</label>
+                                <input type="password" class="form-control" id="user-password" required>
+                            </div>
+                            <button type="submit" class="btn btn-success w-100">Nutzer erstellen</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User List -->
+            <div class="col-md-8">
+                <div class="card shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Nutzer des Accounts</h5>
+                        <span id="user-count" class="badge bg-secondary">0 Nutzer</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Vorname</th>
+                                        <th>Nachname</th>
+                                        <th>E-Mail</th>
+                                        <th class="text-end">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="user-list-body">
+                                    <!-- Users will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/users.js"></script>
+</body>
+</html>
