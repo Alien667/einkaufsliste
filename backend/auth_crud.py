@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from typing import List
 from . import auth_models, auth_schemas
 
 def create_account(db: Session, account: auth_schemas.AccountCreate):
@@ -28,7 +29,8 @@ def create_user(db: Session, user: auth_schemas.UserCreate, hashed_password: str
         last_name=user.last_name,
         email=user.email,
         hashed_password=hashed_password,
-        account_id=user.account_id
+        account_id=user.account_id,
+        is_superuser=user.is_superuser
     )
     db.add(db_user)
     db.commit()
@@ -48,3 +50,18 @@ def delete_user(db: Session, user_id: int, account_id: int):
         db.commit()
         return True
     return False
+
+def promote_user(db: Session, user_id: int):
+    user = db.query(auth_models.User).filter(auth_models.User.id == user_id).first()
+    if user:
+        user.is_superuser = True
+        db.commit()
+        db.refresh(user)
+        return user
+    return None
+
+def get_user_count(db: Session):
+    return db.query(auth_models.User).count()
+
+def get_all_users(db: Session):
+    return db.query(auth_models.User).all()

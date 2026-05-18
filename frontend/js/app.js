@@ -1,5 +1,5 @@
-const API_BASE_URL = './proxy.php';
-//const API_BASE_URL = 'http://localhost:8000';
+//const API_BASE_URL = './proxy.php';
+const API_BASE_URL = 'http://localhost:8000';
 
 // State management
 let currentTripId = null;
@@ -44,6 +44,17 @@ function showApp() {
     document.getElementById('auth-section').style.display = 'none';
     document.getElementById('main-navbar').style.display = 'block';
     document.getElementById('main-app-container').style.display = 'block';
+    
+    // Handle Admin link visibility
+    const adminLinks = document.querySelectorAll('.admin-only');
+    adminLinks.forEach(link => {
+        if (isSuperuser) {
+            link.classList.remove('d-none');
+        } else {
+            link.classList.add('d-none');
+        }
+    });
+
     showPage('current-trip');
 }
 
@@ -83,6 +94,11 @@ async function handleLogin(e) {
         const data = await response.json();
         authToken = data.access_token;
         localStorage.setItem('authToken', authToken);
+        
+        // Store superuser status
+        isSuperuser = data.user.is_superuser;
+        localStorage.setItem('isSuperuser', isSuperuser);
+
         showApp();
     } catch (err) {
         alert(err.message);
@@ -113,6 +129,7 @@ async function handleRegister(e) {
 function logout() {
     authToken = null;
     localStorage.removeItem('authToken');
+    localStorage.removeItem('isSuperuser');
     location.reload();
 }
 
@@ -152,6 +169,9 @@ function showPage(pageId) {
         case 'trip-history':
             loadTripHistory();
             break;
+        case 'admin-accounts':
+            loadAdminDashboard();
+            break;
     }
 }
 
@@ -181,6 +201,7 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
             if (response.status === 401) {
                 authToken = null;
                 localStorage.removeItem('authToken');
+                localStorage.removeItem('isSuperuser');
                 showAuth();
                 throw new Error('Sitzung abgelaufen. Bitte erneut anmelden.');
             }
@@ -464,7 +485,7 @@ async function prepareTripCreation() {
 function renderTripCreationForm() {
     const productContainer = document.getElementById('selection-products');
 
-    productContainer.innerHTML = '<h5 class="mb-3">Waren auswählen</h</h5>';
+    productContainer.innerHTML = '<h5 class="mb-3">Waren auswählen</h5>';
 
     areas.forEach(area => {
         const areaProducts = products.filter(p => p.area_id === area.id);
@@ -734,4 +755,89 @@ async function viewTripDetail(tripId) {
 
 function hideHistoryDetail() {
     showPage('trip-history');
+}
+
+// --- Page 6: Admin Accounts ---
+
+async function loadAdminDashboard() {
+    const accountsList = document.getElementById('accounts-list');
+    const usersList = document.getElementById('admin-users-list');
+
+    try {
+        const [accounts, users] = await Promise.all([
+            apiRequest('/admin/accounts'),
+            apiRequest('/admin/users')
+        ]);
+
+        // Render Accounts
+        accountsList.innerHTML = '';
+        accounts.forEach(account => {
+            const item = document.createElement('div');
+            item.className = 'list-group-item d-flex justify-content-between align-items-center';
+            item.innerHTML = `
+                <span class="fw-bold">${account.name}</span>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteAdminAccount(${account.id})">Löschen</button>
+            `;
+            accountsList.appendChild(item);
+        });
+
+        // Render Users
+        if (usersList) {
+            usersList.innerHTML = '';
+            users.forEach(user => {
+                const item = document.createElement('div');
+                item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                item.innerHTML = `
+                    <div>
+                        <span class="fw-bold">${user.first_name} ${user.last_name}</span><br>
+                        <small class="text-muted">${user.email}</small>
+                        ${user.is_superuser ? '<span class="badge bg-warning text-dark ms-2">Admin</span>' : ''}
+                    </div>
+                    ${!user.is_superuser ? `<button class="btn btn-sm btn-outline-primary" onclick="promoteUserAdmin(${user.id})">Promotieren</button>` : ''}
+                `;
+                usersList.appendChild(item);
+            });
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Fehler beim Laden des Admin-Dashboards.');
+    }
+}
+
+async function openAccountModal() {
+    document.getElementById('accountNameInput').value = '';
+    accountModal.show();
+}
+
+async function saveAdminAccount() {
+    const name = document.getElementById('accountNameInput').value.trim();
+    if (!name) return;
+    try {
+        await apiRequest('/admin/accounts', 'POST', { name });
+        accountModal.hide();
+        loadAdminDashboard();
+    } catch (err) {
+        alert('Account konnte nicht erstellt werden.');
+    }
+}
+
+async function deleteAdminAccount(id) {
+    if (!confirm('Account wirklich löschen? Alle zugehörigen Nutzer werden ebenfalls gelöscht.')) return;
+    try {
+        await apiRequest(`/admin/accounts/${id}`, 'DELETE');
+        loadAdminDashboard();
+    } catch (err) {
+        alert('Account konnte nicht gelöscht werden.');
+    }
+}
+
+async function promoteUserAdmin(id) {
+    if (!confirm('Diesen Nutzer zum Superuser befördern?')) return;
+    try {
+        await apiRequest(`/admin/users/${id}/promote`, 'PATCH');
+        alert('Nutzer wurde befördert!');
+        loadAdminDashboard();
+    } catch (err) {
+        alert('Fehler beim Befördern.');
+    }
 }

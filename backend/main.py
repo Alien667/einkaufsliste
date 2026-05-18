@@ -52,7 +52,7 @@ async def get_current_user(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
     except security.JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
-    
+
     user = auth_crud.get_user_by_email(db, email=credentials.email)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
@@ -75,17 +75,21 @@ def register(
     user_data: auth_schemas.UserCreate,
     db: Session = Depends(get_auth_db)
 ):
-    # 1. Create Account
+    # 1. Check if any users exist to determine if this is the first user
+    is_first_user = auth_crud.get_user_count(db) == 0
+    
+    # 2. Create Account
     account = auth_crud.create_account(db, auth_schemas.AccountCreate(name=f"Account_{user_data.email}"))
 
-    # 2. Create User
+    # 3. Create User
     hashed_password = security.get_password_hash(user_data.password)
     user = auth_crud.create_user(db, auth_schemas.UserCreate(
         first_name=user_data.first_name,
         last_name=user_data.last_name,
         email=user_data.email,
         password=user_data.password,
-        account_id=account.id
+        account_id=account.id,
+        is_superuser=is_first_user  # Set as superuser if it's the first user
     ), hashed_password)
     return user
 
@@ -108,10 +112,17 @@ def login(
         expires_delta=access_token_expires
     )
     return {
-        "access_token": access_token, 
+        "access_token": access_token,
         "token_type": "bearer",
         "user": auth_schemas.UserResponse.from_orm(user)
     }
+
+@app.get("/admin/users", response_model=List[auth_schemas.UserResponse])
+def read_all_users(
+    superuser: auth_models.User = Depends(get_superuser),
+    db: Session = Depends(get_auth_db)
+):
+    return auth_crud.get_all_users(db)
 
 @app.get("/users", response_model=List[auth_schemas.UserResponse])
 def read_users(
@@ -170,6 +181,17 @@ def delete_account_admin(
         raise HTTPException(status_code=404, detail="Account not found")
     return {"message": "Account deleted"}
 
+@app.patch("/admin/users/{user_id}/promote")
+def promote_user_admin(
+    user_id: int,
+    superuser: auth_models.User = Depends(get_superuser),
+    db: Session = Depends(get_auth_db)
+):
+    user = auth_crud.promote_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": f"User {user.email} promoted to superuser"}
+
 # --- Area Endpoints ---
 
 @app.get("/areas", response_model=List[schemas.Area])
@@ -181,7 +203,7 @@ def read_areas(
 
 @app.post("/areas", response_model=schemas.Area)
 def create_area(
-    area: schemas.AreaCreate, 
+    area: schemas.AreaCreate,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -189,7 +211,7 @@ def create_area(
 
 @app.delete("/areas/{area_id}")
 def delete_area(
-    area_id: int, 
+    area_id: int,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -198,7 +220,7 @@ def delete_area(
 
 @app.patch("/areas/reorder")
 def reorder_areas(
-    reorder: schemas.ReorderAreas, 
+    reorder: schemas.ReorderAreas,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -207,8 +229,8 @@ def reorder_areas(
 
 @app.put("/areas/{area_id}", response_model=schemas.Area)
 def update_area(
-    area_id: int, 
-    area: schemas.AreaBase, 
+    area_id: int,
+    area: schemas.AreaBase,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -225,7 +247,7 @@ def read_products(
 
 @app.post("/products", response_model=schemas.Product)
 def create_product(
-    product: schemas.ProductCreate, 
+    product: schemas.ProductCreate,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -233,7 +255,7 @@ def create_product(
 
 @app.delete("/products/{product_id}")
 def delete_product(
-    product_id: int, 
+    product_id: int,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -251,7 +273,7 @@ def create_trip(
 
 @app.get("/trips", response_model=List[schemas.TripWithItems])
 def read_trips(
-    archived: bool = False, 
+    archived: bool = False,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -259,7 +281,7 @@ def read_trips(
 
 @app.get("/trips/{trip_id}", response_model=schemas.TripWithItems)
 def read_trip(
-    trip_id: int, 
+    trip_id: int,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -270,7 +292,7 @@ def read_trip(
 
 @app.post("/trips/{trip_id}/archive")
 def archive_trip(
-    trip_id: int, 
+    trip_id: int,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -281,7 +303,7 @@ def archive_trip(
 
 @app.post("/items", response_model=schemas.ShoppingListItem)
 def create_item(
-    item: schemas.ShoppingListItemCreate, 
+    item: schemas.ShoppingListItemCreate,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -289,7 +311,7 @@ def create_item(
 
 @app.get("/items/trip/{trip_id}", response_model=List[schemas.ShoppingListItem])
 def get_items_by_trip(
-    trip_id: int, 
+    trip_id: int,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -297,8 +319,8 @@ def get_items_by_trip(
 
 @app.patch("/items/{item_id}/check")
 def check_item(
-    item_id: int, 
-    is_checked: bool, 
+    item_id: int,
+    is_checked: bool,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -306,7 +328,7 @@ def check_item(
 
 @app.delete("/items/{item_id}")
 def delete_item(
-    item_id: int, 
+    item_id: int,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -325,7 +347,7 @@ def get_areas_with_products(
 
 @app.get("/products-by-area/{area_id}", response_model=List[schemas.Product])
 def get_products_by_area(
-    area_id: int, 
+    area_id: int,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

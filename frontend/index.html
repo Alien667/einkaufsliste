@@ -173,11 +173,30 @@
         <!-- Page 6: Admin Accounts -->
         <section id="admin-accounts" class="page-section d-none">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2 class="h4">Accounts verwalten (Admin)</h2>
+                <h2 class="h4">Account-Verwaltung (Admin)</h2>
                 <button class="btn btn-success" onclick="openAccountModal()">+ Account hinzufügen</button>
             </div>
-            <div id="accounts-list" class="list-group">
-                <!-- Accounts will be loaded here -->
+
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Accounts</h5>
+                </div>
+                <div class="card-body">
+                    <div id="accounts-list" class="list-group">
+                        <!-- Accounts will be loaded here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Nutzer-Verwaltung (Rechte vergeben)</h5>
+                </div>
+                <div class="card-body">
+                    <div id="admin-users-list" class="list-group">
+                        <!-- Users will be loaded here -->
+                    </div>
+                </div>
             </div>
         </section>
     </div>

@@ -25,10 +25,12 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str = Field(..., max_length=72)
     account_id: Optional[int] = None
+    is_superuser: Optional[bool] = False
 
 class User(UserBase):
     id: int
     account_id: int
+    is_superuser: bool
 
     class Config:
         from_attributes = True
@@ -36,7 +38,7 @@ class User(UserBase):
 class UserResponse(UserBase):
     id: int
     account_id: int
-    is_superuser: bool = False
+    is_superuser: bool
 
     class Config:
         from_attributes = True

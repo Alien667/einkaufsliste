@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from .auth_database import AuthBase
 
@@ -19,9 +19,6 @@ class User(AuthBase):
     last_name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    is_superuser = Column(Boolean, default=False)
 
     account = relationship("Account", back_populates="users")
-
-    @property
-    def is_superuser(self) -> bool:
-        return self.id == 1
