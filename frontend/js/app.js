@@ -530,6 +530,9 @@ function renderTripCreationForm() {
 
     productContainer.innerHTML = '<h5 class="mb-3">Waren auswählen</h5>';
 
+    // Hole die gespeicherten Produkt-IDs aus dem localStorage
+    const selectedProductIds = JSON.parse(localStorage.getItem('selected_trip_products') || '[]');
+
     areas.forEach(area => {
         const areaProducts = products.filter(p => p.area_id === area.id);
         if (areaProducts.length > 0) {
@@ -538,12 +541,19 @@ function renderTripCreationForm() {
             areaDiv.innerHTML = `<strong class="text-muted">${area.name}</strong>`;
 
             areaProducts.forEach(product => {
+                const isChecked = selectedProductIds.includes(product.id);
                 const pDiv = document.createElement('div');
                 pDiv.className = 'form-check ms-3';
                 pDiv.innerHTML = `
-                    <input class="form-check-input product-selector" type="checkbox" value="${product.id}" data-name="${product.name}" data-area-id="${area.id}" id="prod-sel-${product.id}">
+                    <input class="form-check-input product-selector" type="checkbox" value="${product.id}" data-name="${product.name}" data-area-id="${area.id}" id="prod-sel-${product.id}" ${isChecked ? 'checked' : ''}>
                     <label class="form-check-label" for="prod-sel-${product.id}">${product.name}</label>
                 `;
+
+                // Event-Listener zum Speichern der Auswahl
+                pDiv.querySelector('.product-selector').addEventListener('change', (e) => {
+                    updateSelectedProducts(product.id, e.target.checked);
+                });
+
                 areaDiv.appendChild(pDiv);
             });
             productContainer.appendChild(areaDiv);
@@ -570,11 +580,26 @@ async function generateTrip() {
             });
         }
 
+        // Auswahl nach erfolgreichem Abschluss leeren
+        localStorage.removeItem('selected_trip_products');
+
         alert('Einkaufsliste wurde erstellt!');
         showPage('current-trip');
     } catch (err) {
         alert('Fehler beim Erstellen der Einkaufsliste.');
     }
+}
+
+function updateSelectedProducts(productId, isChecked) {
+    let selectedProductIds = JSON.parse(localStorage.getItem('selected_trip_products') || '[]');
+    if (isChecked) {
+        if (!selectedProductIds.includes(productId)) {
+            selectedProductIds.push(productId);
+        }
+    } else {
+        selectedProductIds = selectedProductIds.filter(id => id !== productId);
+    }
+    localStorage.setItem('selected_trip_products', JSON.stringify(selectedProductIds));
 }
 
 // --- Page 4: Current Trip ---
