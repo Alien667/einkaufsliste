@@ -220,3 +220,4 @@ __marimo__/
 .idea/
 backend/auth.db
 backend/shopping_list.db
+test_scripts/
