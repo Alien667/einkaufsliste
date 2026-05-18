@@ -9,7 +9,7 @@
 </head>
 <body class="bg-light">
 
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4" id="main-navbar" style="display: none;">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4 d-none" id="main-navbar">
         <div class="container">
             <a class="navbar-brand" href="#" onclick="showPage('current-trip')">Einkaufsliste</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -48,7 +48,7 @@
         </div>
     </nav>
 
-    <div class="container mt-5" id="auth-section" style="display: none;">
+    <div class="container mt-5 d-none" id="auth-section">
         <div class="row justify-content-center">
             <div class="col-md-5">
                 <div class="card shadow">
@@ -67,7 +67,10 @@
                                 <button type="submit" class="btn btn-primary w-100">Anmelden</button>
                             </form>
                             <hr>
-                            <p class="text-center mb-0">Noch kein Account? <a href="#" onclick="toggleAuthMode()">Registrieren</a></p>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <p class="mb-0">Noch kein Account? <a href="#" onclick="showRegister()">Registrieren</a></p>
+                                <a href="#" onclick="showPasswordResetRequest()">Passwort vergessen?</a>
+                            </div>
                         </div>
 
                         <div id="register-form-container" class="d-none">
@@ -89,10 +92,35 @@
                                     <label class="form-label">Passwort</label>
                                     <input type="password" class="form-control" id="reg-password" required>
                                 </div>
-                                <button type="submit" class="btn btn-success w-100">Konto erstellen</button>
+                                <button type="submit" class="btn btn-success w-100">Bestätigungs-E-Mail senden</button>
                             </form>
                             <hr>
-                            <p class="text-center mb-0">Bereits Account? <a href="#" onclick="toggleAuthMode()">Login</a></p>
+                            <p class="text-center mb-0">Bereits Account? <a href="#" onclick="showLogin()">Login</a></p>
+                        </div>
+
+                        <div id="password-reset-request-container" class="d-none">
+                            <h3 class="text-center mb-4">Passwort vergessen?</h3>
+                            <p class="text-muted text-center">Wir senden Ihnen einen Link zum Zurücksetzen Ihres Passworts an Ihre E-Mail-Adresse.</p>
+                            <form id="password-reset-request-form">
+                                <div class="mb-3">
+                                    <label class="form-label">E-Mail</label>
+                                    <input type="email" class="form-control" id="reset-email" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Link anfordern</button>
+                            </form>
+                            <hr>
+                            <p class="text-center mb-0"><a href="#" onclick="showLogin()">Zurück zum Login</a></p>
+                        </div>
+
+                        <div id="password-reset-confirm-container" class="d-none">
+                            <h3 class="text-center mb-4">Neues Passwort festlegen</h3>
+                            <form id="password-reset-confirm-form">
+                                <div class="mb-3">
+                                    <label class="form-label">Neues Passwort</label>
+                                    <input type="password" class="form-control" id="new-reset-password" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Passwort ändern</button>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -100,7 +128,7 @@
         </div>
     </div>
 
-    <div class="container" id="main-app-container" style="display: none;">
+    <div class="container d-none" id="main-app-container">
         <!-- Page 1: Konfiguration der Bereiche -->
         <section id="config-areas" class="page-section d-none">
             <div class="d-flex justify-content-between align-items-center mb-3">

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
+from datetime import datetime
 
 # --- Account Schemas ---
 
@@ -27,10 +28,15 @@ class UserCreate(UserBase):
     account_id: Optional[int] = None
     is_superuser: Optional[bool] = False
 
+class UserEmailRegistration(UserBase):
+    """Schema for initial registration with name, email, and password."""
+    password: str = Field(..., max_length=72)
+
 class User(UserBase):
     id: int
     account_id: int
     is_superuser: bool
+    is_verified: bool
 
     class Config:
         from_attributes = True
@@ -39,6 +45,7 @@ class UserResponse(UserBase):
     id: int
     account_id: int
     is_superuser: bool
+    is_verified: bool
 
     class Config:
         from_attributes = True
@@ -56,3 +63,10 @@ class TokenData(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetVerify(BaseModel):
+    token: str
+    new_password: str = Field(..., max_length=72)

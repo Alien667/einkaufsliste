@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from .auth_database import AuthBase
 
@@ -20,5 +20,8 @@ class User(AuthBase):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_superuser = Column(Boolean, default=False)
+    is_verified = Column(Boolean, default=False)
+    reset_token = Column(String, nullable=True)
+    reset_token_expires = Column(DateTime, nullable=True)
 
     account = relationship("Account", back_populates="users")

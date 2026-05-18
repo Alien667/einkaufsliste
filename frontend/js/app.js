@@ -35,12 +35,36 @@ function initApp() {
     if (registerForm) {
         registerForm.addEventListener('submit', handleRegister);
     }
-}
 
+    const resetRequestForm = document.getElementById('password-reset-request-form');
+    if (resetRequestForm) {
+        resetRequestForm.addEventListener('submit', handlePasswordResetRequest);
+    }
+
+    const resetConfirmForm = document.getElementById('password-reset-confirm-form');
+    if (resetConfirmForm) {
+        resetConfirmForm.addEventListener('submit', handlePasswordResetSubmit);
+    }
+
+    // Check for token in URL (for verification or reset)
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const type = urlParams.get('type');
+    if (token) {
+        if (type === 'reset') {
+            showPasswordResetConfirm();
+        } else {
+            // Default to verification if no type is provided or it's not 'reset'
+            handleVerifyEmail(token).catch(() => {
+                showPasswordResetConfirm();
+            });
+        }
+    }
+}
 async function showApp() {
-    document.getElementById('auth-section').style.display = 'none';
-    document.getElementById('main-navbar').style.display = 'block';
-    document.getElementById('main-app-container').style.display = 'block';
+    document.getElementById('auth-section').classList.add('d-none');
+    document.getElementById('main-navbar').classList.remove('d-none');
+    document.getElementById('main-app-container').classList.remove('d-none');
 
     // Handle Admin link visibility
     const adminLinks = document.querySelectorAll('.admin-only');
@@ -58,16 +82,62 @@ async function showApp() {
 }
 
 function showAuth() {
-    document.getElementById('auth-section').style.display = 'block';
-    document.getElementById('main-navbar').style.display = 'none';
-    document.getElementById('main-app-container').style.display = 'none';
+    document.getElementById('auth-section').classList.remove('d-none');
+    document.getElementById('main-navbar').classList.add('d-none');
+    document.getElementById('main-app-container').classList.add('d-none');
+
+    document.getElementById('login-form-container').classList.remove('d-none');
+    document.getElementById('register-form-container').classList.add('d-none');
+    document.getElementById('password-reset-request-container').classList.add('d-none');
+    document.getElementById('password-reset-confirm-container').classList.add('d-none');
 }
 
-function toggleAuthMode() {
+function showLogin() {
     const loginContainer = document.getElementById('login-form-container');
     const registerContainer = document.getElementById('register-form-container');
-    loginContainer.classList.toggle('d-none');
-    registerContainer.classList.toggle('d-none');
+    const resetRequestContainer = document.getElementById('password-reset-request-container');
+    const resetConfirmContainer = document.getElementById('password-reset-confirm-container');
+
+    loginContainer.classList.remove('d-none');
+    registerContainer.classList.add('d-none');
+    resetRequestContainer.classList.add('d-none');
+    resetConfirmContainer.classList.add('d-none');
+}
+
+function showRegister() {
+    const loginContainer = document.getElementById('login-form-container');
+    const registerContainer = document.getElementById('register-form-container');
+    const resetRequestContainer = document.getElementById('password-reset-request-container');
+    const resetConfirmContainer = document.getElementById('password-reset-confirm-container');
+
+    loginContainer.classList.add('d-none');
+    registerContainer.classList.remove('d-none');
+    resetRequestContainer.classList.add('d-none');
+    resetConfirmContainer.classList.add('d-none');
+}
+
+function showPasswordResetRequest() {
+    const loginContainer = document.getElementById('login-form-container');
+    const registerContainer = document.getElementById('register-form-container');
+    const resetRequestContainer = document.getElementById('password-reset-request-container');
+    const resetConfirmContainer = document.getElementById('password-reset-confirm-container');
+
+    loginContainer.classList.add('d-none');
+    registerContainer.classList.add('d-none');
+    resetRequestContainer.classList.remove('d-none');
+    resetConfirmContainer.classList.add('d-none');
+}
+
+function showPasswordResetConfirm() {
+    const loginContainer = document.getElementById('login-form-container');
+    const registerContainer = document.getElementById('register-form-container');
+    const resetRequestContainer = document.getElementById('password-reset-request-container');
+    const resetConfirmContainer = document.getElementById('password-reset-confirm-container');
+
+    loginContainer.classList.add('d-none');
+    registerContainer.classList.add('d-none');
+    resetRequestContainer.classList.add('d-none');
+    resetConfirmContainer.classList.remove('d-none');
 }
 
 async function handleLogin(e) {
@@ -93,7 +163,7 @@ async function handleLogin(e) {
         const data = await response.json();
         authToken = data.access_token;
         localStorage.setItem('authToken', authToken);
-        
+
         // Store superuser status
         isSuperuser = data.user.is_superuser;
         localStorage.setItem('isSuperuser', isSuperuser);
@@ -118,10 +188,63 @@ async function handleRegister(e) {
             email: email,
             password: password
         });
-        alert('Registrierung erfolgreich! Bitte jetzt anmelden.');
-        toggleAuthMode();
+        alert('Bestätigungs-E-Mail wurde gesendet! Bitte deinen Posteingang prüfen.');
+        showLogin();
     } catch (err) {
         alert('Registrierung fehlgeschlagen: ' + err.message);
+    }
+}
+
+async function handlePasswordResetRequest(e) {
+    e.preventDefault();
+    const email = document.getElementById('reset-email').value;
+
+    try {
+        await apiRequest('/auth/request-reset', 'POST', { email });
+        alert('Wenn die E-Mail registriert ist, wurde ein Link zum Zurücksetzen gesendet.');
+    } catch (err) {
+        alert('Fehler beim Anfordern des Passwort-Resets: ' + err.message);
+    }
+}
+
+async function handlePasswordResetSubmit(e) {
+    e.preventDefault();
+    const token = new URLSearchParams(window.location.search).get('token');
+    const newPassword = document.getElementById('new-reset-password').value;
+
+    if (!token) {
+        alert('Kein Reset-Token gefunden!');
+        return;
+    }
+
+    try {
+        await apiRequest('/auth/reset-password', 'POST', {
+            token: token,
+            new_password: newPassword
+        });
+        alert('Passwort erfolgreich geändert!');
+        
+        // URL bereinigen
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        showLogin();
+    } catch (err) {
+        alert('Fehler beim Zurücksetzen des Passworts: ' + err.message);
+    }
+}
+
+async function handleVerifyEmail(token) {
+    try {
+        await apiRequest(`/auth/verify-email?token=${token}`, 'POST');
+        alert('E-Mail erfolgreich verifiziert!');
+        
+        // URL bereinigen
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        showLogin();
+    } catch (err) {
+        // Re-throw the error so the caller can decide what to do
+        throw err;
     }
 }
 
@@ -131,7 +254,6 @@ function logout() {
     localStorage.removeItem('isSuperuser');
     location.reload();
 }
-
 // --- Navigation ---
 
 function showPage(pageId) {

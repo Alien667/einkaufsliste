@@ -3,9 +3,11 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime, timedelta
 
 from . import crud, models, schemas, database
 from . import auth_database, auth_crud, auth_models, auth_schemas, security
+from .email_service import email_service
 
 # Initialize database
 models.Base.metadata.create_all(bind=database.engine)
@@ -71,28 +73,76 @@ async def get_superuser(
 # --- Auth Endpoints ---
 
 @app.post("/register", response_model=auth_schemas.UserResponse)
-def register(
-    user_data: auth_schemas.UserCreate,
+async def register(
+    user_data: auth_schemas.UserEmailRegistration,
     db: Session = Depends(get_auth_db)
 ):
-    # 1. Check if any users exist to determine if this is the first user
+    # 1. Check if user already exists
+    existing_user = auth_crud.get_user_by_email(db, user_data.email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # 2. Check if any users exist to determine if this is the first user
     is_first_user = auth_crud.get_user_count(db) == 0
-    
-    # 2. Create Account
+
+    # 3. Create Account
     account = auth_crud.create_account(db, auth_schemas.AccountCreate(name=f"Account_{user_data.email}"))
 
-    # 3. Create User
+    # 4. Create Unverified User
     hashed_password = security.get_password_hash(user_data.password)
-    user = auth_crud.create_user(db, auth_schemas.UserCreate(
-        first_name=user_data.first_name,
-        last_name=user_data.last_name,
-        email=user_data.email,
-        password=user_data.password,
-        account_id=account.id,
-        is_superuser=is_first_user  # Set as superuser if it's the first user
-    ), hashed_password)
+
+    user = auth_crud.create_unverified_user(db, user_data, hashed_password, account.id)
+
+    # 5. Generate Verification Token
+    token = security.create_verification_token({"email": user.email})
+    expires = datetime.utcnow() + timedelta(minutes=security.VERIFICATION_TOKEN_EXPIRE_MINUTES)
+    auth_crud.set_user_reset_token(db, user.id, token, expires)
+
+    # 6. Send Email
+    await email_service.send_verification_email(user.email, f"http://localhost:63342/einkaufsliste-git/frontend/index.html?token={token}&type=verify")
+
     return user
 
+@app.post("/auth/request-reset")
+async def request_password_reset(
+    request_data: auth_schemas.PasswordResetRequest,
+    db: Session = Depends(get_auth_db)
+):
+    user = auth_crud.get_user_by_email(db, request_data.email)
+    if not user:
+        return {"message": "If the email is registered, a reset link has been sent."}
+
+    token = security.create_verification_token({"email": user.email})
+    expires = datetime.utcnow() + timedelta(minutes=security.VERIFICATION_TOKEN_EXPIRE_MINUTES)
+    auth_crud.set_user_reset_token(db, user.id, token, expires)
+
+    await email_service.send_password_reset_email(user.email, f"http://localhost:63342/einkaufsliste-git/frontend/index.html?token={token}&type=reset")
+    return {"message": "If the email is registered, a reset link has been sent."}
+
+@app.post("/auth/verify-email")
+def verify_email(
+    token: str,
+    db: Session = Depends(get_auth_db)
+):
+    user = auth_crud.get_user_by_reset_token(db, token)
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    auth_crud.verify_user(db, user.id)
+    return {"message": "Email verified successfully"}
+
+@app.post("/auth/reset-password")
+def reset_password(
+    data: auth_schemas.PasswordResetVerify,
+    db: Session = Depends(get_auth_db)
+):
+    user = auth_crud.get_user_by_reset_token(db, data.token)
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    hashed_password = security.get_password_hash(data.new_password)
+    auth_crud.update_password_after_reset(db, user.id, hashed_password)
+    return {"message": "Password reset successfully"}
 @app.post("/login")
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
