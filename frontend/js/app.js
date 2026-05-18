@@ -563,6 +563,15 @@ function renderTripCreationForm() {
 
 async function generateTrip() {
     try {
+        // Prüfen, ob bereits ein aktiver Einkauf existiert
+        const trips = await apiRequest('/trips');
+        const activeTrip = trips.find(t => !t.is_archived);
+        if (activeTrip) {
+            if (!confirm('Es ist noch ein aktueller Einkauf offen. Möchten Sie trotzdem eine neue Liste erstellen?')) {
+                return;
+            }
+        }
+
         const newTrip = await apiRequest('/trips', 'POST');
         currentTripId = newTrip.id;
 
