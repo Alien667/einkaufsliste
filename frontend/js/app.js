@@ -355,10 +355,19 @@ function renderProductsList() {
     areas.forEach(area => {
         const areaProducts = grouped[area.id];
 
+        // Container für den gesamten Bereich
+        const areaContainer = document.createElement('div');
+        areaContainer.className = 'mb-4';
+
+        // Bereich-Header
         const areaHeader = document.createElement('div');
-        areaHeader.className = 'fw-bold mt-3 mb-1 text-primary';
+        areaHeader.className = 'fw-bold mb-1 text-primary';
         areaHeader.innerText = area.name;
-        list.appendChild(areaHeader);
+        areaContainer.appendChild(areaHeader);
+
+        // Liste der Produkte in diesem Bereich
+        const areaProductsList = document.createElement('div');
+        areaProductsList.className = 'list-group';
 
         areaProducts.forEach(product => {
             const item = document.createElement('div');
@@ -370,8 +379,43 @@ function renderProductsList() {
                 </div>
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteProduct(${product.id})">Löschen</button>
             `;
-            list.appendChild(item);
+            areaProductsList.appendChild(item);
         });
+        areaContainer.appendChild(areaProductsList);
+
+        // Quick-Add UI direkt im Bereich
+        const quickAddDiv = document.createElement('div');
+        quickAddDiv.className = 'input-group input-group-sm mt-2 mb-1';
+        quickAddDiv.innerHTML = `
+            <input type="text" class="form-control quick-add-input" placeholder="Neue Ware...">
+            <button class="btn btn-outline-primary quick-add-btn" type="button">+</button>
+        `;
+
+        const input = quickAddDiv.querySelector('.quick-add-input');
+        const btn = quickAddDiv.querySelector('.quick-add-btn');
+
+        btn.onclick = async () => {
+            const name = input.value.trim();
+            if (name) {
+                try {
+                    await apiRequest('/products', 'POST', {
+                        name: name,
+                        area_id: area.id
+                    });
+                    input.value = '';
+                    loadProductsAndAreas();
+                } catch (err) {
+                    alert('Fehler beim Hinzufügen.');
+                }
+            }
+        };
+
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') btn.click();
+        };
+
+        areaContainer.appendChild(quickAddDiv);
+        list.appendChild(areaContainer);
     });
 }
 
