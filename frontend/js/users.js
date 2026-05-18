@@ -1,6 +1,3 @@
-//const API_BASE_URL = './proxy.php';
-const API_BASE_URL = 'http://localhost:8000';
-
 // State management
 let authToken = localStorage.getItem('authToken');
 
@@ -107,7 +104,7 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+        const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}${endpoint}`, options);
         if (!response.ok) {
             const errorData = await response.json();
             if (response.status === 401) {

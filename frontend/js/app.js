@@ -1,6 +1,3 @@
-//const API_BASE_URL = './proxy.php';
-const API_BASE_URL = 'http://localhost:8000';
-
 // State management
 let currentTripId = null;
 let areas = [];
@@ -81,7 +78,7 @@ async function handleLogin(e) {
         params.append('username', email);
         params.append('password', password);
 
-        const response = await fetch(`${API_BASE_URL}/login`, {
+        const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/login`, {
             method: 'POST',
             body: params
         });
@@ -194,7 +191,7 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+        const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}${endpoint}`, options);
         if (!response.ok) {
             const errorData = await response.json();
             // If unauthorized, clear token and redirect to login
