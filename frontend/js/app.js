@@ -37,11 +37,11 @@ function initApp() {
     }
 }
 
-function showApp() {
+async function showApp() {
     document.getElementById('auth-section').style.display = 'none';
     document.getElementById('main-navbar').style.display = 'block';
     document.getElementById('main-app-container').style.display = 'block';
-    
+
     // Handle Admin link visibility
     const adminLinks = document.querySelectorAll('.admin-only');
     adminLinks.forEach(link => {
@@ -52,6 +52,8 @@ function showApp() {
         }
     });
 
+    // Vorab die Stammdaten (Bereiche/Waren) laden, damit die erste Seite korrekt angezeigt wird
+    await loadProductsAndAreas();
     showPage('current-trip');
 }
 
