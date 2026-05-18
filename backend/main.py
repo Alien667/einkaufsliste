@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +9,9 @@ from datetime import datetime, timedelta
 from . import crud, models, schemas, database
 from . import auth_database, auth_crud, auth_models, auth_schemas, security
 from .email_service import email_service
+
+# Load configuration
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:63342/einkaufsliste-git/frontend/index.html")
 
 # Initialize database
 models.Base.metadata.create_all(bind=database.engine)
@@ -99,7 +103,7 @@ async def register(
     auth_crud.set_user_reset_token(db, user.id, token, expires)
 
     # 6. Send Email
-    await email_service.send_verification_email(user.email, f"http://localhost:63342/einkaufsliste-git/frontend/index.html?token={token}&type=verify")
+    await email_service.send_verification_email(user.email, f"{FRONTEND_BASE_URL}?token={token}&type=verify")
 
     return user
 
@@ -116,7 +120,7 @@ async def request_password_reset(
     expires = datetime.utcnow() + timedelta(minutes=security.VERIFICATION_TOKEN_EXPIRE_MINUTES)
     auth_crud.set_user_reset_token(db, user.id, token, expires)
 
-    await email_service.send_password_reset_email(user.email, f"http://localhost:63342/einkaufsliste-git/frontend/index.html?token={token}&type=reset")
+    await email_service.send_password_reset_email(user.email, f"{FRONTEND_BASE_URL}?token={token}&type=reset")
     return {"message": "If the email is registered, a reset link has been sent."}
 
 @app.post("/auth/verify-email")

@@ -1,30 +1,69 @@
 import logging
+import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
 
-logger = logging.getLogger(__name__)
+# Load environment variables from .env file
+load_dotenv()
+
+logger = logging.getLogger("uvicorn")
 
 class EmailService:
     """
-    Service for sending emails. 
-    Currently implemented as a logger for development purposes.
+    Service for sending emails using Brevo SMTP.
     """
 
+    def __init__(self):
+        self.smtp_server = os.getenv("SMTP_SERVER", "smtp-relay.brevo.com")
+        self.smtp_port = int(os.getenv("SMTP_PORT", 587))
+        self.smtp_user = os.getenv("SMTP_USER")
+        self.smtp_password = os.getenv("SMTP_PASSWORD")
+
+    def _send_email(self, to_email: str, subject: str, body: str):
+        # Debug Logging
+        logger.info("==================================================")
+        logger.info(f"DEBUG EMAIL: To: {to_email}")
+        logger.info(f"DEBUG EMAIL: Subject: {subject}")
+        logger.info(f"DEBUG EMAIL: Body: {body}")
+        logger.info("==================================================")
+
+        if not self.smtp_user or not self.smtp_password:
+            logger.error("SMTP credentials not configured. Check your .env file.")
+            raise ValueError("SMTP credentials missing.")
+
+        #msg = MIMEMultipart()
+        #msg['From'] = self.smtp_user
+        #msg['To'] = to_email
+        #msg['Subject'] = subject
+        #msg.attach(MIMEText(body, 'plain'))
+
+        #try:
+        #    with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+        #        server.starttls()
+        #        server.login(self.smtp_user, self.smtp_password)
+        #        server.sendmail(msg['From'], to_email, msg.as_string())
+        #    logger.info(f"Email successfully sent to {to_email}")
+        #except Exception as e:
+        #    logger.error(f"Failed to send email to {to_email}: {e}")
+        #    raise e
+
     async def send_verification_email(self, email: str, verification_link: str):
-        # In a real implementation, you would use smtplib or fastapi-mail here.
-        logger.info(f"--- [MOCK EMAIL SENT] ---")
-        logger.info(f"To: {email}")
-        logger.info(f"Subject: Verify your email address")
-        logger.info(f"Body: Please click the link to verify your email: {verification_link}")
-        logger.info(f"-------------------------")
-        # For local development, we print to console so the developer can see the link.
-        print(f"\n[MOCK EMAIL] To: {email}\nLink: {verification_link}\n")
+        """Sends an email for account verification."""
+        subject = "Verifizierung Ihrer E-Mail-Adresse"
+        body = f"Bitte klicken Sie auf den folgenden Link, um Ihre E-Mail-Adresse zu verifizieren:\n\n{verification_link}"
+        
+        import anyio
+        await anyio.to_thread.run_sync(self._send_email, email, subject, body)
 
     async def send_password_reset_email(self, email: str, reset_link: str):
-        logger.info(f"--- [MOCK EMAIL SENT] ---")
-        logger.info(f"To: {email}")
-        logger.info(f"Subject: Password Reset Request")
-        logger.info(f"Body: Please click the link to reset your password: {reset_link}")
-        logger.info(f"-------------------------")
-        print(f"\n[MOCK EMAIL] To: {email}\nLink: {reset_link}\n")
+        """Sends an email for password reset."""
+        subject = "Passwort zurücksetzen"
+        body = f"Bitte klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:\n\n{reset_link}"
+        
+        import anyio
+        await anyio.to_thread.run_sync(self._send_email, email, subject, body)
 
 # Singleton instance
 email_service = EmailService()
