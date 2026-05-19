@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import anyio
 
 # Load environment variables from .env file
 load_dotenv()
@@ -21,6 +22,7 @@ class EmailService:
         self.smtp_port = int(os.getenv("SMTP_PORT", 587))
         self.smtp_user = os.getenv("SMTP_USER")
         self.smtp_password = os.getenv("SMTP_PASSWORD")
+        self.notification_email = os.getenv("EMAIL_NOTIFICATION_ADDRESS")
 
     def _send_email(self, to_email: str, subject: str, body: str):
         # Debug Logging
@@ -50,21 +52,26 @@ class EmailService:
             logger.error(f"Failed to send email to {to_email}: {e}")
             raise e
 
+    async def _send_notification(self, message: str):
+        if self.notification_email:
+            subject = "E-Mail-Versand Benachrichtigung"
+            await anyio.to_thread.run_sync(self._send_email, self.notification_email, subject, message)
+
     async def send_verification_email(self, email: str, verification_link: str):
         """Sends an email for account verification."""
         subject = "Verifizierung Ihrer E-Mail-Adresse"
         body = f"Bitte klicken Sie auf den folgenden Link, um Ihre E-Mail-Adresse zu verifizieren:\n\n{verification_link}"
-        
-        import anyio
+
         await anyio.to_thread.run_sync(self._send_email, email, subject, body)
+        await self._send_notification(f"Registrierung: E-Mail-Verifizierung gesendet an {email}")
 
     async def send_password_reset_email(self, email: str, reset_link: str):
         """Sends an email for password reset."""
         subject = "Passwort zurücksetzen"
         body = f"Bitte klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:\n\n{reset_link}"
-        
-        import anyio
+
         await anyio.to_thread.run_sync(self._send_email, email, subject, body)
+        await self._send_notification(f"Passwort-Reset: E-Mail für {email} gesendet")
 
 # Singleton instance
 email_service = EmailService()
