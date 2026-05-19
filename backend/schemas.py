@@ -30,6 +30,10 @@ class ProductBase(BaseModel):
 class ProductCreate(ProductBase):
     pass
 
+class ProductUpdate(BaseModel):
+    name: Optional[str] = None
+    area_id: Optional[int] = None
+
 class Product(ProductBase):
     id: int
     account_id: int

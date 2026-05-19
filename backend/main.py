@@ -313,16 +313,24 @@ def create_product(
 ):
     return crud.create_product(db, product, current_user.account_id)
 
-@app.delete("/products/{product_id}")
-def delete_product(
+@app.put("/products/{product_id}", response_model=schemas.Product)
+def update_product(
     product_id: int,
+    product_update: schemas.ProductUpdate,
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    crud.delete_product(db, product_id, current_user.account_id)
-    return {"message": "Product deleted"}
+    # Get existing product to handle partial updates
+    from . import models
+    db_product = db.query(models.Product).filter(models.Product.id == product_id, models.Product.account_id == current_user.account_id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
 
-# --- ShoppingTrip Endpoints ---
+    name = product_update.name if product_update.name is not None else db_product.name
+    area_id = product_update.area_id if product_update.area_id is not None else db_product.area_id
+
+    product = crud.update_product(db, product_id, name, area_id, current_user.account_id)
+    return product
 
 @app.post("/trips", response_model=schemas.ShoppingTrip)
 def create_trip(
