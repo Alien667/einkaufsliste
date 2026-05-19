@@ -1,9 +1,10 @@
 import logging
 import os
+from dotenv import load_dotenv
+
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
@@ -33,21 +34,21 @@ class EmailService:
             logger.error("SMTP credentials not configured. Check your .env file.")
             raise ValueError("SMTP credentials missing.")
 
-        #msg = MIMEMultipart()
-        #msg['From'] = self.smtp_user
-        #msg['To'] = to_email
-        #msg['Subject'] = subject
-        #msg.attach(MIMEText(body, 'plain'))
+        msg = MIMEMultipart()
+        msg['From'] = self.smtp_user
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
 
-        #try:
-        #    with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-        #        server.starttls()
-        #        server.login(self.smtp_user, self.smtp_password)
-        #        server.sendmail(msg['From'], to_email, msg.as_string())
-        #    logger.info(f"Email successfully sent to {to_email}")
-        #except Exception as e:
-        #    logger.error(f"Failed to send email to {to_email}: {e}")
-        #    raise e
+        try:
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_user, self.smtp_password)
+                server.sendmail(msg['From'], to_email, msg.as_string())
+            logger.info(f"Email successfully sent to {to_email}")
+        except Exception as e:
+            logger.error(f"Failed to send email to {to_email}: {e}")
+            raise e
 
     async def send_verification_email(self, email: str, verification_link: str):
         """Sends an email for account verification."""
