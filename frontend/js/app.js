@@ -778,6 +778,7 @@ async function loadCurrentTrip() {
                 areaItems.forEach(item => {
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'product-item-row';
+                    itemDiv.setAttribute('data-item-id', item.id);
                     itemDiv.innerHTML = `
                         <input class="form-check-input product-item-checkbox" type="checkbox" ${item.is_checked ? 'checked' : ''} onchange="toggleItemCheck(${item.id}, this.checked)">
                         <span class="product-item-name ${item.is_checked ? 'item-checked' : ''}">${item.name}</span>
@@ -799,6 +800,7 @@ async function loadCurrentTrip() {
             unknownItems.forEach(item => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'product-item-row';
+                itemDiv.setAttribute('data-item-id', item.id);
                 itemDiv.innerHTML = `
                     <input class="form-check-input product-item-checkbox" type="checkbox" ${item.is_checked ? 'checked' : ''} onchange="toggleItemCheck(${item.id}, this.checked)">
                     <span class="product-item-name ${item.is_checked ? 'item-checked' : ''}">${item.name}</span>
@@ -813,10 +815,30 @@ async function loadCurrentTrip() {
     }
 }
 async function toggleItemCheck(itemId, isChecked) {
+    const itemRow = document.querySelector(`[data-item-id="${itemId}"]`);
     try {
         await apiRequest(`/items/${itemId}/check?is_checked=${isChecked}`, 'PATCH');
-        loadCurrentTrip();
-    } catch (err) {}
+        
+        if (itemRow) {
+            const checkbox = itemRow.querySelector('.product-item-checkbox');
+            const nameSpan = itemRow.querySelector('.product-item-name');
+            
+            if (checkbox) checkbox.checked = isChecked;
+            if (nameSpan) {
+                if (isChecked) {
+                    nameSpan.classList.add('item-checked');
+                } else {
+                    nameSpan.classList.remove('item-checked');
+                }
+            }
+        }
+    } catch (err) {
+        console.error(err);
+        if (itemRow) {
+            const checkbox = itemRow.querySelector('.product-item-checkbox');
+            if (checkbox) checkbox.checked = !isChecked;
+        }
+    }
 }
 
 async function deleteItem(itemId) {
