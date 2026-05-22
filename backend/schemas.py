@@ -14,6 +14,7 @@ class AreaCreate(AreaBase):
 class Area(AreaBase):
     id: int
     account_id: int
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -37,6 +38,7 @@ class ProductUpdate(BaseModel):
 class Product(ProductBase):
     id: int
     account_id: int
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -54,6 +56,7 @@ class ShoppingTrip(ShoppingTripBase):
     created_at: datetime
     is_archived: bool
     account_id: int
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -75,6 +78,7 @@ class ShoppingListItem(ShoppingListItemBase):
     product_id: Optional[int] = None
     area_id: Optional[int] = None
     account_id: int
+    updated_at: datetime
 
     class Config:
         from_attributes = True

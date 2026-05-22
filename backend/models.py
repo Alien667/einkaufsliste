@@ -10,6 +10,7 @@ class Area(Base):
     account_id = Column(Integer, index=True, nullable=False)
     name = Column(String, index=True, nullable=False)
     position = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     products = relationship("Product", back_populates="area", cascade="all, delete-orphan")
 
@@ -20,6 +21,7 @@ class Product(Base):
     account_id = Column(Integer, index=True, nullable=False)
     name = Column(String, index=True, nullable=False)
     area_id = Column(Integer, ForeignKey("areas.id"), nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     area = relationship("Area", back_populates="products")
 
@@ -47,6 +49,7 @@ class ShoppingListItem(Base):
     # Link to area (can be used for spontaneous items)
     area_id = Column(Integer, ForeignKey("areas.id"), nullable=True)
 
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     trip = relationship("ShoppingTrip", back_populates="items")
     product = relationship("Product")
     area = relationship("Area")

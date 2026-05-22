@@ -1,0 +1,414 @@
+/**
+ * Sync engine for offline-first shopping list app.
+ * Combines IndexedDB, SSE push notifications, and operation queue.
+ */
+
+import db from './db.js';
+
+// --- State ---
+let isConnected = false;
+let eventSource = null;
+let operationQueue = [];
+let isSyncing = false;
+let lastSyncTimestamp = null;
+let pendingConflicts = [];
+
+// --- Event listeners ---
+const listeners = new Map();
+
+function emit(event, data) {
+    const handlers = listeners.get(event) || [];
+    handlers.forEach(handler => handler(data));
+}
+
+function on(event, handler) {
+    if (!listeners.has(event)) listeners.set(event, []);
+    listeners.get(event).push(handler);
+}
+
+// --- Sync Status UI ---
+function updateOnlineStatus(online) {
+    isConnected = online;
+    emit('sync:status', { online, connecting: !online && !eventSource });
+
+    // Update badge
+    const badge = document.getElementById('sync-badge');
+    if (badge) {
+        if (!online) {
+            badge.className = 'badge bg-danger ms-2';
+            badge.textContent = 'Offline';
+        } else if (operationQueue.length > 0) {
+            badge.className = 'badge bg-warning ms-2';
+            badge.textContent = `Sync: ${operationQueue.length}`;
+        } else {
+            badge.className = 'badge bg-success ms-2';
+            badge.textContent = 'Online';
+        }
+    }
+
+    // Show toast notification for status changes
+    if (!online) {
+        showToast('Verbindung getrennt. Änderungen werden lokal gespeichert.', 'bg-warning text-dark');
+    } else if (eventSource) {
+        showToast('Wieder online. Synchronisiere...', 'bg-success');
+    }
+}
+
+function showToast(message, bgClass = 'bg-primary') {
+    const toastEl = document.getElementById('sync-toast');
+    const toastBody = document.getElementById('sync-toast-body');
+    if (!toastEl || !toastBody) return;
+
+    toastBody.textContent = message;
+    toastEl.className = `toast align-items-center text-white ${bgClass} border-0`;
+
+    const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+    toast.show();
+}
+
+// --- Operation Queue ---
+function queueOperation(entity, operation, data, entityId) {
+    const op = {
+        op_id: crypto.randomUUID(),
+        entity,
+        operation,
+        entity_id: entityId,
+        data: { ...data, _client_updated_at: new Date().toISOString() },
+        timestamp: Date.now(),
+    };
+    operationQueue.push(op);
+    emit('sync:queue-changed', { queueLength: operationQueue.length });
+
+    // Try to sync immediately if online
+    if (isConnected && !isSyncing) {
+        flushQueue();
+    }
+
+    return op;
+}
+
+async function flushQueue() {
+    if (isSyncing || operationQueue.length === 0 || !isConnected) return;
+
+    isSyncing = true;
+    emit('sync:flush-started', {});
+
+    try {
+        const batch = operationQueue.splice(0, 50); // Process in batches
+        const operations = batch.map(op => ({
+            op_id: op.op_id,
+            entity: op.entity,
+            operation: op.operation,
+            entity_id: op.entity_id,
+            data: op.data,
+        }));
+
+        const auth = await db.getAuth();
+        const token = auth?.token;
+
+        if (!token) {
+            // Put operations back if no token
+            operationQueue.unshift(...batch);
+            return;
+        }
+
+        const response = await fetch(`${CONFIG.API_BASE}/sync/operations`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ operations }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Sync failed: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        // Handle conflicts
+        result.results.forEach((resultItem) => {
+            if (resultItem.status === 'conflict') {
+                emit('sync:conflict', {
+                    entity: resultItem.entity,
+                    entityId: resultItem.entity_id,
+                    serverData: resultItem.server_data,
+                    clientData: batch.find(b => b.op_id === resultItem.op_id)?.data,
+                });
+            }
+        });
+
+        emit('sync:flush-complete', { processed: batch.length });
+        showToast(`${batch.length} Änderungen synchronisiert`, 'bg-success');
+    } catch (error) {
+        console.error('Queue flush failed:', error);
+        // Put operations back in queue
+        operationQueue.unshift(...batch);
+        emit('sync:flush-error', { error: error.message });
+        showToast(`Sync fehlgeschlagen: ${error.message}`, 'bg-danger');
+    } finally {
+        isSyncing = false;
+        emit('sync:status', { online: isConnected, queueLength: operationQueue.length });
+
+        // Try to sync again if there are more operations
+        if (operationQueue.length > 0) {
+            setTimeout(flushQueue, 2000);
+        }
+    }
+}
+
+// --- SSE Connection ---
+function connectSSE() {
+    if (eventSource) {
+        eventSource.close();
+    }
+
+    const auth = db.getAuth();
+    if (!auth?.token) {
+        console.warn('No auth token for SSE');
+        return;
+    }
+
+    const token = auth.token;
+    const sseUrl = `${CONFIG.API_BASE}/sync/stream?token=${encodeURIComponent(token)}`;
+
+    console.log('Connecting to SSE stream...');
+    eventSource = new EventSource(sseUrl);
+
+    eventSource.onopen = () => {
+        console.log('SSE connection opened');
+        updateOnlineStatus(true);
+    };
+
+    eventSource.addEventListener('change', (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            handleSSEChange(data);
+        } catch (error) {
+            console.error('Failed to parse SSE event:', error);
+        }
+    });
+
+    eventSource.onerror = (error) => {
+        console.error('SSE connection error:', error);
+        updateOnlineStatus(false);
+        eventSource.close();
+        eventSource = null;
+
+        // Reconnect after delay (EventSource does this automatically, but we handle UI)
+        setTimeout(() => {
+            if (!isConnected) {
+                connectSSE();
+            }
+        }, 5000);
+    };
+}
+
+function handleSSEChange(data) {
+    const { entity, operation, entity_id, data: changeData } = data;
+    console.log('SSE change:', entity, operation, entity_id);
+
+    // Update local database immediately
+    handleLocalChange(entity, operation, entity_id, changeData);
+
+    emit('sync:push-update', { entity, operation, entity_id });
+}
+
+async function handleLocalChange(entity, operation, entityId, changeData) {
+    try {
+        switch (entity) {
+            case 'areas':
+                if (operation === 'delete') {
+                    await db.deleteArea(entityId);
+                } else if (changeData) {
+                    const existing = await db.getArea(entityId);
+                    if (existing) {
+                        await db.saveArea({ ...existing, ...changeData, updated_at: changeData.updated_at || existing.updated_at });
+                    } else {
+                        // New area from another client
+                        await db.saveArea(changeData);
+                    }
+                }
+                break;
+
+            case 'products':
+                if (operation === 'delete') {
+                    await db.deleteProduct(entityId);
+                } else if (changeData) {
+                    const existing = await db.get(db.STORES.PRODUCTS, entityId);
+                    if (existing) {
+                        await db.put(db.STORES.PRODUCTS, { ...existing, ...changeData, updated_at: changeData.updated_at || existing.updated_at });
+                    } else {
+                        await db.put(db.STORES.PRODUCTS, changeData);
+                    }
+                }
+                break;
+
+            case 'items':
+                if (operation === 'delete') {
+                    await db.deleteItem(entityId);
+                } else if (changeData) {
+                    const existing = await db.get(db.STORES.ITEMS, entityId);
+                    if (existing) {
+                        await db.put(db.STORES.ITEMS, { ...existing, ...changeData, updated_at: changeData.updated_at || existing.updated_at });
+                    } else {
+                        await db.put(db.STORES.ITEMS, changeData);
+                    }
+                }
+                break;
+
+            case 'trips':
+                if (changeData) {
+                    const existing = await db.getTrip(entityId);
+                    if (existing) {
+                        await db.saveTrip({ ...existing, ...changeData, updated_at: changeData.updated_at || existing.updated_at });
+                    } else {
+                        await db.saveTrip(changeData);
+                    }
+                }
+                break;
+        }
+
+        // Refresh UI if on relevant page
+        emit('sync:ui-refresh', { entity });
+    } catch (error) {
+        console.error('Error handling local change:', error);
+    }
+}
+
+// --- Polling Sync (fallback when SSE not available) ---
+async function pollForChanges() {
+    if (!isConnected) return;
+
+    const auth = await db.getAuth();
+    if (!auth?.token) return;
+
+    try {
+        const params = new URLSearchParams();
+        if (lastSyncTimestamp) {
+            params.set('since', lastSyncTimestamp);
+        }
+
+        const response = await fetch(`${CONFIG.API_BASE}/sync/changes?${params}`, {
+            headers: {
+                'Authorization': `Bearer ${auth.token}`,
+            },
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+
+        // Update local database with server changes
+        await applyServerChanges(data);
+
+        lastSyncTimestamp = new Date().toISOString();
+    } catch (error) {
+        console.error('Polling failed:', error);
+    }
+}
+
+async function applyServerChanges(data) {
+    // Apply areas
+    if (data.areas?.length > 0) {
+        await db.bulkPut(db.STORES.AREAS, data.areas);
+    }
+
+    // Apply products
+    if (data.products?.length > 0) {
+        await db.bulkPut(db.STORES.PRODUCTS, data.products);
+    }
+
+    // Apply trips
+    if (data.trips?.length > 0) {
+        await db.bulkPut(db.STORES.TRIPS, data.trips);
+    }
+
+    // Apply items
+    if (data.items?.length > 0) {
+        await db.bulkPut(db.STORES.ITEMS, data.items);
+    }
+
+    emit('sync:poll-complete', {
+        areas: data.areas?.length || 0,
+        products: data.products?.length || 0,
+        trips: data.trips?.length || 0,
+        items: data.items?.length || 0,
+    });
+}
+
+// --- Full Sync ---
+async function fullSync() {
+    if (!isConnected) {
+        emit('sync:error', { message: 'Nicht verbunden' });
+        return;
+    }
+
+    emit('sync:started', {});
+
+    try {
+        // First, flush local queue
+        await flushQueue();
+
+        // Then, pull server changes
+        await pollForChanges();
+
+        emit('sync:complete', {});
+    } catch (error) {
+        console.error('Full sync failed:', error);
+        emit('sync:error', { message: `Sync fehlgeschlagen: ${error.message}` });
+    }
+}
+
+// --- Initialization ---
+async function initSync() {
+    await db.open();
+
+    // Listen for online/offline events (from cache-layer)
+    window.addEventListener('online', () => {
+        console.log('Connection restored, reconnecting...');
+        updateOnlineStatus(true);
+        if (!eventSource) connectSSE();
+        fullSync();
+    });
+
+    window.addEventListener('offline', () => {
+        console.log('Connection lost');
+        updateOnlineStatus(false);
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+    });
+
+    // Expose sync API globally
+    window.sync = {
+        queueOperation,
+        fullSync,
+        flushQueue,
+        on,
+        updateBadge(online) {
+            updateOnlineStatus(online);
+        },
+        get isConnected() { return isConnected; },
+        get queueLength() { return operationQueue.length; },
+    };
+
+    // Initial sync
+    if (navigator.onLine) {
+        updateOnlineStatus(true);
+        connectSSE();
+
+        // Initial poll
+        await pollForChanges();
+
+        // Start periodic polling as backup
+        setInterval(pollForChanges, 60000); // Every minute
+    } else {
+        updateOnlineStatus(false);
+    }
+}
+
+// Start sync engine
+initSync().catch(console.error);

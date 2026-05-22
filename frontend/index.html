@@ -8,8 +8,17 @@
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="bg-light">
+    <!-- Loading overlay -->
+    <div id="app-loader" class="d-flex justify-content-center align-items-center" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999;">
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Lädt...</span>
+            </div>
+            <p class="mt-3">App wird geladen...</p>
+        </div>
+    </div>
 
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4 d-none" id="main-navbar">
+   <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4 d-none" id="main-navbar">
         <div class="container">
             <a class="navbar-brand" href="#" onclick="showPage('current-trip')">Einkaufsliste</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -17,6 +26,14 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav">
+                    <li class="nav-item me-2">
+                        <span id="sync-badge" class="badge bg-secondary">Lädt...</span>
+                    </li>
+                    <li class="nav-item me-2">
+                        <button class="btn btn-sm btn-outline-light" onclick="window.sync?.fullSync()" title="Jetzt synchronisieren">
+                            <i class="bi bi-arrow-clockwise"></i> Sync
+                        </button>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#" onclick="showPage('config-areas')" data-page-id="config-areas">Bereiche</a>
                     </li>
@@ -326,6 +343,32 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="js/config.js"></script>
-    <script src="js/app.js"></script>
+   <script type="module">
+        import db from './db.js';
+        import { initApp } from './js/app.js';
+        import './sync.js';
+        import './data-layer.js';
+        import './js/cache-layer.js';
+        window.db = db;
+
+        // Hide loader and start app once all modules are loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            const loader = document.getElementById('app-loader');
+            if (loader) loader.remove();
+            initApp();
+        });
+    </script>
+
+    <!-- Sync Toast Notifications -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+        <div id="sync-toast" class="toast align-items-center text-white bg-primary border-0" role="alert" aria-live="assertive" aria-describedby="sync-toast-body">
+            <div class="d-flex">
+                <div class="toast-body" id="sync-toast-body">
+                    Sync-Nachricht
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Schließen"></button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

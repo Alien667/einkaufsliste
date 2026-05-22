@@ -1062,3 +1062,36 @@ async function promoteUserAdmin(id) {
         alert('Fehler beim Befördern.');
     }
 }
+
+// --- Make all functions available globally for HTML onclick handlers ---
+window.showPage = showPage;
+window.showLogin = showLogin;
+window.showRegister = showRegister;
+window.showPasswordResetRequest = showPasswordResetRequest;
+window.logout = logout;
+window.loadAdminDashboard = loadAdminDashboard;
+window.saveAdminAccount = saveAdminAccount;
+window.deleteAdminAccount = deleteAdminAccount;
+window.promoteUserAdmin = promoteUserAdmin;
+window.openAreaModal = openAreaModal;
+window.startEditArea = startEditArea;
+window.cancelEditArea = cancelEditArea;
+window.saveArea = saveArea;
+window.deleteArea = deleteArea;
+window.openProductModal = openProductModal;
+window.startEditProduct = startEditProduct;
+window.cancelEditProduct = cancelEditProduct;
+window.saveProduct = saveProduct;
+window.deleteProduct = deleteProduct;
+window.prepareTripCreation = prepareTripCreation;
+window.generateTrip = generateTrip;
+window.completeTrip = completeTrip;
+window.openSpontaneousProductModal = openSpontaneousProductModal;
+window.saveSpontaneousProduct = saveSpontaneousProduct;
+window.toggleItemCheck = toggleItemCheck;
+window.deleteItem = deleteItem;
+window.viewTripDetail = viewTripDetail;
+window.hideHistoryDetail = hideHistoryDetail;
+window.openAccountModal = openAccountModal;
+
+export { initApp };
