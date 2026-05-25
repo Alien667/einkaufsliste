@@ -429,6 +429,7 @@ def create_item(
     db_item = crud.create_list_item(db, item, current_user.account_id)
     _broadcast_change(current_user.account_id, "items", db_item.id, "create", {
         "id": db_item.id, "trip_id": db_item.trip_id, "name": db_item.name,
+        "sort_order": db_item.sort_order,
         "is_checked": db_item.is_checked, "product_id": db_item.product_id,
         "area_id": db_item.area_id, "account_id": db_item.account_id,
         "updated_at": db_item.updated_at.isoformat() if db_item.updated_at else None,
@@ -453,6 +454,7 @@ def check_item(
     db_item = crud.update_item_check(db, item_id, is_checked, current_user.account_id)
     _broadcast_change(current_user.account_id, "items", db_item.id, "patch", {
         "id": db_item.id, "trip_id": db_item.trip_id, "name": db_item.name,
+        "sort_order": db_item.sort_order,
         "is_checked": db_item.is_checked, "product_id": db_item.product_id,
         "area_id": db_item.area_id, "account_id": db_item.account_id,
         "updated_at": db_item.updated_at.isoformat() if db_item.updated_at else None,

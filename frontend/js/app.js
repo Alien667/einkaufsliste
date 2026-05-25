@@ -717,6 +717,7 @@ async function generateTrip() {
         currentTripId = newTrip.id;
 
         const selectedElements = document.querySelectorAll('.product-selector:checked');
+        let sortOrder = 0;
 
         for (const el of selectedElements) {
             const name = el.getAttribute('data-name');
@@ -726,7 +727,8 @@ async function generateTrip() {
                 trip_id: currentTripId,
                 name: name,
                 product_id: product_id,
-                area_id: area_id
+                area_id: area_id,
+                sort_order: sortOrder++
             });
         }
 
@@ -767,6 +769,14 @@ function renderItems(items) {
         itemsContainer.innerHTML = '<p class="text-muted">Noch keine Produkte ausgewählt.</p>';
         return;
     }
+
+    // Sortieren: nach sort_order (Erstellungsreihenfolge), bei Gleichheit nach Name
+    items.sort((a, b) => {
+        const orderA = a.sort_order ?? 0;
+        const orderB = b.sort_order ?? 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return (a.name || '').localeCompare(b.name || '');
+    });
 
     // 1. Items für jede Area rendern (in definierter Reihenfolge)
     areas.forEach(area => {
@@ -1037,10 +1047,14 @@ async function saveSpontaneousProduct() {
     if (!currentTripId) return;
 
     try {
+        // Hole die aktuelle Anzahl Items, um sort_order zu berechnen
+        const items = await apiRequest(`/items/trip/${currentTripId}`);
+        const nextSortOrder = items ? items.length : 0;
         await apiRequest('/items', 'POST', {
             trip_id: currentTripId,
             name: name,
-            area_id: area_id
+            area_id: area_id,
+            sort_order: nextSortOrder
         });
         spontaneousModal.hide();
         loadCurrentTrip();

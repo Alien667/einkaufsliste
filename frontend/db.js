@@ -269,11 +269,8 @@ const db = {
             }
         }
         const allItems = await this.getAll(STORES.ITEMS, 'trip_id', tripId);
-        // Sort: unchecked first, then by name
-        return allItems.sort((a, b) => {
-            if (a.is_checked !== b.is_checked) return a.is_checked ? 1 : -1;
-            return (a.name || '').localeCompare(b.name || '');
-        });
+        // Sortierung nach sort_order (Erstellungsreihenfolge) – erfolgt jetzt in renderItems()
+        return allItems;
     },
 
     async getAllItems() {

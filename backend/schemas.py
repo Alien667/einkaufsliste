@@ -65,6 +65,7 @@ class ShoppingTrip(ShoppingTripBase):
 
 class ShoppingListItemBase(BaseModel):
     name: str
+    sort_order: int = 0
     is_checked: bool = False
     product_id: Optional[int] = None
     area_id: Optional[int] = None

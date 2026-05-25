@@ -42,6 +42,7 @@ class ShoppingListItem(Base):
     account_id = Column(Integer, index=True, nullable=False)
     trip_id = Column(Integer, ForeignKey("shopping_trips.id"), nullable=False)
     name = Column(String, nullable=False)
+    sort_order = Column(Integer, default=0)
     is_checked = Column(Boolean, default=False)
 
     # Links to product if it was from the master list

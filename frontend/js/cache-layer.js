@@ -700,6 +700,7 @@ function applyPatches() {
                     id: Date.now(),
                     trip_id: currentTripId,
                     name: name,
+                    sort_order: 0,
                     is_checked: false,
                     area_id: area_id,
                     product_id: null,

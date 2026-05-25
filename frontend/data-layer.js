@@ -85,6 +85,7 @@ async function saveItemToDB(itemData) {
         id: itemData.id,
         trip_id: itemData.trip_id,
         name: itemData.name,
+        sort_order: itemData.sort_order ?? 0,
         is_checked: itemData.is_checked || false,
         product_id: itemData.product_id || null,
         area_id: itemData.area_id || null,

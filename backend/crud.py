@@ -100,7 +100,7 @@ def create_list_item(db: Session, item: schemas.ShoppingListItemCreate, account_
     return db_item
 
 def get_items_for_trip(db: Session, trip_id: int, account_id: int):
-    return db.query(models.ShoppingListItem).filter(models.ShoppingListItem.trip_id == trip_id, models.ShoppingListItem.account_id == account_id).all()
+    return db.query(models.ShoppingListItem).filter(models.ShoppingListItem.trip_id == trip_id, models.ShoppingListItem.account_id == account_id).order_by(models.ShoppingListItem.sort_order).all()
 
 def update_item_check(db: Session, item_id: int, is_checked: bool, account_id: int):
     db_item = db.query(models.ShoppingListItem).filter(models.ShoppingListItem.id == item_id, models.ShoppingListItem.account_id == account_id).first()

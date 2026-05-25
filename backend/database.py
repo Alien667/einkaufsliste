@@ -19,6 +19,7 @@ def init_db():
     """Initialise tables and run schema migrations."""
     Base.metadata.create_all(bind=engine)
     _migrate_updated_at()
+    _migrate_sort_order()
 
 
 def _migrate_updated_at():
@@ -46,6 +47,24 @@ def _migrate_updated_at():
                     text("UPDATE {} SET updated_at = '1970-01-01 00:00:00' WHERE updated_at IS NULL OR updated_at = 0".format(table))
                 )
                 session.commit()
+    finally:
+        session.close()
+
+
+def _migrate_sort_order():
+    """Add `sort_order` column to shopping_list_items if missing."""
+    session = SessionLocal()
+    try:
+        table = "shopping_list_items"
+        col_names = [r[1] for r in session.execute(
+            text("PRAGMA table_info({})".format(table))
+        ).fetchall()]
+
+        if "sort_order" not in col_names:
+            session.execute(
+                text("ALTER TABLE {} ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0".format(table))
+            )
+            session.commit()
     finally:
         session.close()
 
