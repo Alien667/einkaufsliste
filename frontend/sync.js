@@ -58,24 +58,12 @@ function updateOnlineStatus(online) {
         }
     }
 
-    // Show toast notification for status changes
+    // Status-Änderungen nur im Log, keine Toasts
     if (!online) {
-        showToast('Verbindung getrennt. Änderungen werden lokal gespeichert.', 'bg-warning text-dark');
+        if (window.debugLog) window.debugLog.warn('SYNC', 'Verbindung getrennt. Änderungen werden lokal gespeichert.');
     } else if (eventSource) {
-        showToast('Wieder online. Synchronisiere...', 'bg-success');
+        if (window.debugLog) window.debugLog.info('SYNC', 'Wieder online. Synchronisiere...');
     }
-}
-
-function showToast(message, bgClass = 'bg-primary') {
-    const toastEl = document.getElementById('sync-toast');
-    const toastBody = document.getElementById('sync-toast-body');
-    if (!toastEl || !toastBody) return;
-
-    toastBody.textContent = message;
-    toastEl.className = `toast align-items-center text-white ${bgClass} border-0`;
-
-    const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
-    toast.show();
 }
 
 // --- Operation Queue ---
@@ -169,7 +157,6 @@ async function flushQueue() {
             window.debugLog.success('SYNC', '✅ ' + batch.length + ' Operationen erfolgreich synchronisiert');
         }
         emit('sync:flush-complete', { processed: batch.length });
-        showToast(`${batch.length} Änderungen synchronisiert`, 'bg-success');
     } catch (error) {
         if (window.debugLog) {
             window.debugLog.error('SYNC', '❌ Sync fehlgeschlagen: ' + error.message + ' - Operationen zurück in Warteschlange');
@@ -178,7 +165,6 @@ async function flushQueue() {
         // Put operations back in queue
         operationQueue.unshift(...batch);
         emit('sync:flush-error', { error: error.message });
-        showToast(`Sync fehlgeschlagen: ${error.message}`, 'bg-danger');
     } finally {
         isSyncing = false;
         emit('sync:status', { online: isConnected, queueLength: operationQueue.length });

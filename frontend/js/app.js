@@ -905,11 +905,9 @@ async function loadCurrentTrip() {
     // Container-Struktur sicherstellen (wird von beiden Pfaden verwendet)
     function ensureContainerStructure(offlineWarning) {
         container.innerHTML = '';
-        if (offlineWarning) {
-            const banner = document.createElement('div');
-            banner.className = 'alert alert-warning';
-            banner.textContent = '⚠️ Offline – Daten aus dem Cache';
-            container.appendChild(banner);
+        // Offline-Hinweis nur im Log, nicht als Popup auf der UI
+        if (offlineWarning && window.debugLog) {
+            window.debugLog.warn('APP', 'Offline – Daten aus dem Cache');
         }
         const header = document.createElement('div');
         header.className = 'd-flex justify-content-between align-items-center mb-3';
@@ -957,13 +955,14 @@ async function loadCurrentTrip() {
             const apiTrips = await apiRequest('/trips');
             const activeTrip = apiTrips?.find(t => !t.is_archived);
 
-            if (!activeTrip) {
-                container.innerHTML = '<div class="alert alert-info">Kein aktiver Einkauf gefunden. Erstelle einen neuen!</div>';
+           if (!activeTrip) {
+                if (window.debugLog) window.debugLog.warn('APP', 'Kein aktiver Einkauf auf dem Server gefunden');
+                container.innerHTML = '';
                 completeBtn.classList.add('d-none');
                 return;
             }
 
-           currentTripId = activeTrip.id;
+            currentTripId = activeTrip.id;
             completeBtn.classList.remove('d-none');
             const apiItems = await apiRequest(`/items/trip/${activeTrip.id}`);
             renderItems(apiItems);
@@ -971,10 +970,12 @@ async function loadCurrentTrip() {
 
             // Cache aktualisieren (wird von cache-layer.js gemacht, wenn apiRequest erfolgreich war)
         } catch (err) {
-            // Kein API, kein Cache
-            ensureContainerStructure(true);
+            // Fehler nur im Log, keine Popups auf der UI
+            if (window.debugLog) {
+                window.debugLog.warn('APP', 'API-Lese fehlgeschlagen: ' + err.message);
+            }
+            container.innerHTML = '';
             completeBtn.classList.add('d-none');
-            container.innerHTML = '<div class="alert alert-warning">⚠️ Offline – Kein aktiver Einkauf im Cache. Erstelle einen neuen!</div>';
         }
     }
 }
