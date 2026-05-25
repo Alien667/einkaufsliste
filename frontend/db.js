@@ -146,8 +146,18 @@ const db = {
     },
 
     async getAllAreas() {
-        const auth = await this.getAuth();
-        if (!auth?.account_id) return [];
+        let auth = await this.getAuth();
+        // Fallback: wenn keine Auth in IndexedDB, prüfe localStorage
+        if (!auth?.account_id) {
+            const localToken = localStorage.getItem('authToken');
+            if (!localToken) return [];
+            const storedAuth = localStorage.getItem('_auth_account_id');
+            if (storedAuth) {
+                auth = { account_id: parseInt(storedAuth) };
+            } else {
+                return [];
+            }
+        }
         return this.getAll(STORES.AREAS, 'account_id', auth.account_id);
     },
 
@@ -161,14 +171,34 @@ const db = {
     },
 
     async getProductsByArea(areaId) {
-        const auth = await this.getAuth();
-        if (!auth?.account_id) return [];
+        let auth = await this.getAuth();
+        // Fallback: wenn keine Auth in IndexedDB, prüfe localStorage
+        if (!auth?.account_id) {
+            const localToken = localStorage.getItem('authToken');
+            if (!localToken) return [];
+            const storedAuth = localStorage.getItem('_auth_account_id');
+            if (storedAuth) {
+                auth = { account_id: parseInt(storedAuth) };
+            } else {
+                return [];
+            }
+        }
         return this.getAll(STORES.PRODUCTS, 'area_id', areaId);
     },
 
     async getAllProducts() {
-        const auth = await this.getAuth();
-        if (!auth?.account_id) return [];
+        let auth = await this.getAuth();
+        // Fallback: wenn keine Auth in IndexedDB, prüfe localStorage
+        if (!auth?.account_id) {
+            const localToken = localStorage.getItem('authToken');
+            if (!localToken) return [];
+            const storedAuth = localStorage.getItem('_auth_account_id');
+            if (storedAuth) {
+                auth = { account_id: parseInt(storedAuth) };
+            } else {
+                return [];
+            }
+        }
         return this.getAll(STORES.PRODUCTS, 'account_id', auth.account_id);
     },
 
@@ -182,9 +212,25 @@ const db = {
     },
 
     async getAllTrips() {
-        const auth = await this.getAuth();
-        if (!auth?.account_id) return [];
-        const trips = await this.getAll(STORES.TRIPS, 'account_id', auth.account_id);
+        // Hole account_id für Filterung
+        let account_id = null;
+        let auth = await this.getAuth();
+        if (auth?.account_id) {
+            account_id = auth.account_id;
+        } else {
+            // Fallback: wenn keine Auth in IndexedDB, prüfe localStorage
+            const localToken = localStorage.getItem('authToken');
+            if (!localToken) return [];
+            // Hole account_id aus localStorage wenn vorhanden
+            const storedAuth = localStorage.getItem('_auth_account_id');
+            if (storedAuth) {
+                account_id = parseInt(storedAuth);
+            }
+        }
+        // Wenn account_id bekannt ist, filtere danach; sonst hole ALLE Trips
+        const trips = account_id
+            ? await this.getAll(STORES.TRIPS, 'account_id', account_id)
+            : await this.getAll(STORES.TRIPS);
         return trips.sort((a, b) => {
             // Active trips first, then archived
             if (a.is_archived !== b.is_archived) return a.is_archived ? 1 : -1;
@@ -210,8 +256,18 @@ const db = {
     },
 
     async getItemsByTrip(tripId) {
-        const auth = await this.getAuth();
-        if (!auth?.account_id) return [];
+        let auth = await this.getAuth();
+        // Fallback: wenn keine Auth in IndexedDB, prüfe localStorage
+        if (!auth?.account_id) {
+            const localToken = localStorage.getItem('authToken');
+            if (!localToken) return [];
+            const storedAuth = localStorage.getItem('_auth_account_id');
+            if (storedAuth) {
+                auth = { account_id: parseInt(storedAuth) };
+            } else {
+                return [];
+            }
+        }
         const allItems = await this.getAll(STORES.ITEMS, 'trip_id', tripId);
         // Sort: unchecked first, then by name
         return allItems.sort((a, b) => {
@@ -221,8 +277,18 @@ const db = {
     },
 
     async getAllItems() {
-        const auth = await this.getAuth();
-        if (!auth?.account_id) return [];
+        let auth = await this.getAuth();
+        // Fallback: wenn keine Auth in IndexedDB, prüfe localStorage
+        if (!auth?.account_id) {
+            const localToken = localStorage.getItem('authToken');
+            if (!localToken) return [];
+            const storedAuth = localStorage.getItem('_auth_account_id');
+            if (storedAuth) {
+                auth = { account_id: parseInt(storedAuth) };
+            } else {
+                return [];
+            }
+        }
         return this.getAll(STORES.ITEMS, 'account_id', auth.account_id);
     },
 

@@ -28,8 +28,20 @@ function on(event, handler) {
 
 // --- Sync Status UI ---
 function updateOnlineStatus(online) {
+    const wasOnline = isConnected;
     isConnected = online;
     emit('sync:status', { online, connecting: !online && !eventSource });
+
+    // Debug logging
+    if (window.debugLog) {
+        if (wasOnline && !online) {
+            window.debugLog.warn('SYNC', '🔴 Verbindung getrennt (Backend nicht erreichbar?)');
+        } else if (!wasOnline && online) {
+            window.debugLog.success('SYNC', '🟢 Verbindung wiederhergestellt');
+        } else {
+            // Same state, just update
+        }
+    }
 
     // Update badge
     const badge = document.getElementById('sync-badge');
@@ -79,6 +91,11 @@ function queueOperation(entity, operation, data, entityId) {
     operationQueue.push(op);
     emit('sync:queue-changed', { queueLength: operationQueue.length });
 
+    // Debug logging
+    if (window.debugLog) {
+        window.debugLog.info('SYNC', 'Queue: ' + operation + ' ' + entity + ' (id: ' + (entityId || 'n/a') + ') [' + operationQueue.length + ' in Warteschlange]');
+    }
+
     // Try to sync immediately if online
     if (isConnected && !isSyncing) {
         flushQueue();
@@ -93,8 +110,14 @@ async function flushQueue() {
     isSyncing = true;
     emit('sync:flush-started', {});
 
+    const batch = operationQueue.splice(0, 50); // Process in batches
+
+    // Debug logging
+    if (window.debugLog) {
+        window.debugLog.info('SYNC', '🔄 Sende ' + batch.length + ' Operationen an Server...');
+    }
+
     try {
-        const batch = operationQueue.splice(0, 50); // Process in batches
         const operations = batch.map(op => ({
             op_id: op.op_id,
             entity: op.entity,
@@ -109,6 +132,9 @@ async function flushQueue() {
         if (!token) {
             // Put operations back if no token
             operationQueue.unshift(...batch);
+            if (window.debugLog) {
+                window.debugLog.error('SYNC', 'Kein Auth-Token');
+            }
             return;
         }
 
@@ -139,9 +165,15 @@ async function flushQueue() {
             }
         });
 
+        if (window.debugLog) {
+            window.debugLog.success('SYNC', '✅ ' + batch.length + ' Operationen erfolgreich synchronisiert');
+        }
         emit('sync:flush-complete', { processed: batch.length });
         showToast(`${batch.length} Änderungen synchronisiert`, 'bg-success');
     } catch (error) {
+        if (window.debugLog) {
+            window.debugLog.error('SYNC', '❌ Sync fehlgeschlagen: ' + error.message + ' - Operationen zurück in Warteschlange');
+        }
         console.error('Queue flush failed:', error);
         // Put operations back in queue
         operationQueue.unshift(...batch);
@@ -167,31 +199,36 @@ function connectSSE() {
     const auth = db.getAuth();
     if (!auth?.token) {
         console.warn('No auth token for SSE');
+        if (window.debugLog) window.debugLog.warn('SSE', 'Kein Auth-Token vorhanden');
         return;
     }
 
     const token = auth.token;
     const sseUrl = `${CONFIG.API_BASE}/sync/stream?token=${encodeURIComponent(token)}`;
 
-    console.log('Connecting to SSE stream...');
+    if (window.debugLog) {
+        window.debugLog.info('SSE', '🔗 Verbinde zu SSE-Stream: ' + sseUrl.substring(0, 60) + '...');
+    }
     eventSource = new EventSource(sseUrl);
 
     eventSource.onopen = () => {
-        console.log('SSE connection opened');
+        if (window.debugLog) window.debugLog.success('SSE', '✅ SSE-Stream verbunden');
         updateOnlineStatus(true);
     };
 
-    eventSource.addEventListener('change', (event) => {
+    eventSource.addEventListener('sync_update', (event) => {
         try {
             const data = JSON.parse(event.data);
             handleSSEChange(data);
         } catch (error) {
             console.error('Failed to parse SSE event:', error);
+            if (window.debugLog) window.debugLog.error('SSE', 'Fehler beim Parsen: ' + error.message);
         }
     });
 
     eventSource.onerror = (error) => {
         console.error('SSE connection error:', error);
+        if (window.debugLog) window.debugLog.error('SSE', '❌ SSE-Verbindungsfehler');
         updateOnlineStatus(false);
         eventSource.close();
         eventSource = null;
@@ -199,6 +236,7 @@ function connectSSE() {
         // Reconnect after delay (EventSource does this automatically, but we handle UI)
         setTimeout(() => {
             if (!isConnected) {
+                if (window.debugLog) window.debugLog.info('SSE', '🔄 Versuche SSE-Neuverbindung...');
                 connectSSE();
             }
         }, 5000);
@@ -207,7 +245,7 @@ function connectSSE() {
 
 function handleSSEChange(data) {
     const { entity, operation, entity_id, data: changeData } = data;
-    console.log('SSE change:', entity, operation, entity_id);
+    if (window.debugLog) window.debugLog.info('SSE', '📨 ' + operation + ' ' + entity + ' (id: ' + entity_id + ')');
 
     // Update local database immediately
     handleLocalChange(entity, operation, entity_id, changeData);
@@ -341,10 +379,12 @@ async function applyServerChanges(data) {
 // --- Full Sync ---
 async function fullSync() {
     if (!isConnected) {
+        if (window.debugLog) window.debugLog.warn('SYNC', '⏸ FullSync abgelehnt - nicht verbunden');
         emit('sync:error', { message: 'Nicht verbunden' });
         return;
     }
 
+    if (window.debugLog) window.debugLog.info('SYNC', '🔄 FullSync gestartet...');
     emit('sync:started', {});
 
     try {
@@ -354,8 +394,10 @@ async function fullSync() {
         // Then, pull server changes
         await pollForChanges();
 
+        if (window.debugLog) window.debugLog.success('SYNC', '✅ FullSync abgeschlossen');
         emit('sync:complete', {});
     } catch (error) {
+        if (window.debugLog) window.debugLog.error('SYNC', '❌ FullSync fehlgeschlagen: ' + error.message);
         console.error('Full sync failed:', error);
         emit('sync:error', { message: `Sync fehlgeschlagen: ${error.message}` });
     }
@@ -363,18 +405,20 @@ async function fullSync() {
 
 // --- Initialization ---
 async function initSync() {
+    if (window.debugLog) window.debugLog.info('SYNC', '🚀 Synchronisation wird initialisiert...');
+
     await db.open();
 
     // Listen for online/offline events (from cache-layer)
     window.addEventListener('online', () => {
-        console.log('Connection restored, reconnecting...');
+        if (window.debugLog) window.debugLog.info('SYNC', '🌐 System-Event: online');
         updateOnlineStatus(true);
         if (!eventSource) connectSSE();
         fullSync();
     });
 
     window.addEventListener('offline', () => {
-        console.log('Connection lost');
+        if (window.debugLog) window.debugLog.info('SYNC', '📴 System-Event: offline');
         updateOnlineStatus(false);
         if (eventSource) {
             eventSource.close();
@@ -393,10 +437,19 @@ async function initSync() {
         },
         get isConnected() { return isConnected; },
         get queueLength() { return operationQueue.length; },
+        // Expose pending operations for a specific entity (for offline-first rendering)
+        getPendingOperations(entity) {
+            return operationQueue.filter(op => op.entity === entity);
+        },
+        // Get the last pending operation for an entity ID
+        getPendingOperationForEntity(entity, entityId) {
+            return operationQueue.find(op => op.entity === entity && op.entity_id === entityId);
+        },
     };
 
     // Initial sync
     if (navigator.onLine) {
+        if (window.debugLog) window.debugLog.success('SYNC', 'System initial: Online');
         updateOnlineStatus(true);
         connectSSE();
 
@@ -406,8 +459,11 @@ async function initSync() {
         // Start periodic polling as backup
         setInterval(pollForChanges, 60000); // Every minute
     } else {
+        if (window.debugLog) window.debugLog.warn('SYNC', 'System initial: Offline');
         updateOnlineStatus(false);
     }
+
+    if (window.debugLog) window.debugLog.success('SYNC', '✅ Synchronisation initialisiert');
 }
 
 // Start sync engine

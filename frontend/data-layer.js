@@ -133,7 +133,7 @@ async function createArea(name) {
         await saveAreaToDB(savedArea);
     } catch (err) {
         console.error('Failed to sync area:', err);
-        alert('Fehler beim Erstellen des Bereichs: ' + err.message);
+        showAlert('Fehler beim Erstellen des Bereichs: ' + err.message);
         await loadLocalAreas(); // Reload from server
     }
 }
@@ -165,7 +165,7 @@ async function updateArea(id, name) {
         await saveAreaToDB({ id, name, updated_at: area.updated_at });
     } catch (err) {
         console.error('Failed to update area:', err);
-        alert('Fehler beim Aktualisieren des Bereichs: ' + err.message);
+        showAlert('Fehler beim Aktualisieren des Bereichs: ' + err.message);
         await loadLocalAreas();
     }
 }
@@ -193,7 +193,7 @@ async function deleteArea(id) {
         await db.deleteArea(id);
     } catch (err) {
         console.error('Failed to delete area:', err);
-        alert('Fehler beim Löschen des Bereichs: ' + err.message);
+        showAlert('Fehler beim Löschen des Bereichs: ' + err.message);
         await loadLocalAreas();
     }
 }

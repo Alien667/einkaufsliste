@@ -11,12 +11,14 @@ let isOnline = navigator.onLine;
 
 window.addEventListener('online', () => {
     isOnline = true;
+    if (window.debugLog) window.debugLog.info('CACHE', '🌐 System: online');
     hideOfflineBanner();
     if (window.cacheLayer) window.cacheLayer.onOnline?.();
 });
 
 window.addEventListener('offline', () => {
     isOnline = false;
+    if (window.debugLog) window.debugLog.warn('CACHE', '📴 System: offline');
     showOfflineBanner();
     if (window.cacheLayer) window.cacheLayer.onOffline?.();
 });
@@ -59,10 +61,40 @@ window.fetch = async function(...args) {
     return response;
 };
 
+// Log cache-layer initialization
+if (window.debugLog) {
+    window.debugLog.info('CACHE', '💾 Caching layer initialisiert (Online: ' + isOnline + ')');
+}
+
 async function cacheApiResponse(url, data) {
     try {
-        const auth = await db.getAuth();
+        let auth = await db.getAuth();
+        // Fallback: Wenn keine Auth in IndexedDB, hole account_id aus localStorage
+        if (!auth?.account_id) {
+            const localToken = localStorage.getItem('authToken');
+            if (localToken) {
+                const storedAccountId = localStorage.getItem('_auth_account_id');
+                if (storedAccountId) {
+                    auth = { account_id: parseInt(storedAccountId) };
+                }
+            }
+        }
+        // Zweiter Fallback: Versuche account_id aus den Antwortdaten selbst zu extrahieren
+        // (nützlich wenn _auth_account_id noch nicht gesetzt ist)
+        if (!auth?.account_id) {
+            const localToken = localStorage.getItem('authToken');
+            if (localToken) {
+                if (Array.isArray(data) && data.length > 0 && data[0]?.account_id) {
+                    auth = { account_id: data[0].account_id };
+                } else if (typeof data === 'object' && data !== null && data?.account_id) {
+                    auth = { account_id: data.account_id };
+                }
+            }
+        }
         if (!auth?.account_id) return;
+
+        // Speichere account_id persistent im localStorage für alle localStorage-Fallbacks
+        localStorage.setItem('_auth_account_id', String(auth.account_id));
 
         const now = new Date().toISOString();
 
@@ -70,18 +102,21 @@ async function cacheApiResponse(url, data) {
             for (const area of data) {
                 await db.saveArea({ ...area, account_id: auth.account_id, updated_at: now });
             }
+            if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: ' + data.length + ' Bereiche von ' + url.substring(0, 60));
         }
 
         if (url.includes('/products') && Array.isArray(data)) {
             for (const product of data) {
                 await db.saveProduct({ ...product, account_id: auth.account_id, updated_at: now });
             }
+            if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: ' + data.length + ' Produkte von ' + url.substring(0, 60));
         }
 
         if (url.includes('/trips') && !url.includes('/archive') && Array.isArray(data)) {
             for (const trip of data) {
                 await db.saveTrip({ ...trip, account_id: auth.account_id, updated_at: now });
             }
+            if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: ' + data.length + ' Trips von ' + url.substring(0, 60));
         }
 
         if (url.includes('/items/trip/') && Array.isArray(data)) {
@@ -95,26 +130,32 @@ async function cacheApiResponse(url, data) {
                         updated_at: now,
                     });
                 }
+                if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: ' + data.length + ' Items für Trip ' + tripId);
             }
         }
 
         if (url.includes('/trips/') && !url.includes('/archive') && !url.includes('/archived') && typeof data === 'object' && data.id) {
             await db.saveTrip({ ...data, account_id: auth.account_id, updated_at: now });
+            if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: Einzeltrip ' + data.id);
         }
 
         if (url.match(/\/areas\/\d+$/) && typeof data === 'object' && data.id) {
             await db.saveArea({ ...data, account_id: auth.account_id, updated_at: now });
+            if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: Einzelbereich ' + data.id);
         }
 
         if (url.match(/\/products\/\d+$/) && typeof data === 'object' && data.id) {
             await db.saveProduct({ ...data, account_id: auth.account_id, updated_at: now });
+            if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: Einzelprodukt ' + data.id);
         }
 
         if (url.match(/\/items\/\d+$/) && typeof data === 'object' && data.id) {
             await db.saveItem({ ...data, account_id: auth.account_id, updated_at: now });
+            if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: Einzelitem ' + data.id);
         }
 
     } catch (err) {
+        if (window.debugLog) window.debugLog.error('CACHE', '❌ Cache-Write fehlgeschlagen: ' + err.message);
         console.error('Cache write failed:', err);
     }
 }
@@ -127,31 +168,42 @@ async function loadFromCache(endpoint) {
         if (!auth?.account_id) return [];
 
         if (endpoint === '/areas') {
-            return await db.getAllAreas();
+            const data = await db.getAllAreas();
+            if (window.debugLog) window.debugLog.info('CACHE', '📖 Cache-Lese: ' + data.length + ' Bereiche');
+            return data;
         }
 
         if (endpoint === '/products') {
-            return await db.getAllProducts();
+            const data = await db.getAllProducts();
+            if (window.debugLog) window.debugLog.info('CACHE', '📖 Cache-Lese: ' + data.length + ' Produkte');
+            return data;
         }
 
         if (endpoint.includes('/items/trip/')) {
             const tripId = endpoint.match(/\/items\/trip\/(\d+)/)?.[1];
             if (tripId) {
-                return await db.getItemsByTrip(parseInt(tripId));
+                const data = await db.getItemsByTrip(parseInt(tripId));
+                if (window.debugLog) window.debugLog.info('CACHE', '📖 Cache-Lese: ' + data.length + ' Items für Trip ' + tripId);
+                return data;
             }
         }
 
         if (endpoint === '/trips') {
-            return await db.getAllTrips();
+            const data = await db.getAllTrips();
+            if (window.debugLog) window.debugLog.info('CACHE', '📖 Cache-Lese: ' + data.length + ' Trips');
+            return data;
         }
 
         if (endpoint.includes('/trips?archived=true')) {
             const allTrips = await db.getAllTrips();
-            return allTrips.filter(t => t.is_archived);
+            const archived = allTrips.filter(t => t.is_archived);
+            if (window.debugLog) window.debugLog.info('CACHE', '📖 Cache-Lese: ' + archived.length + ' archivierte Trips');
+            return archived;
         }
 
         return [];
     } catch (err) {
+        if (window.debugLog) window.debugLog.error('CACHE', '❌ Cache-Lese fehlgeschlagen: ' + err.message);
         console.error('Cache load failed:', err);
         return [];
     }
@@ -159,16 +211,124 @@ async function loadFromCache(endpoint) {
 
 // --- Patch functions after all modules are loaded ---
 function applyPatches() {
-    // --- Intercept apiRequest for offline fallback ---
+    // --- Patch loadFromCache to merge local changes for item endpoints ---
+    // WICHTIG: Bei /items/trip/{id} muessen lokale Änderungen (z.B. gesetzte Checkboxen)
+    // priorisiert werden, da der Server-Cache diese nicht enthaelt.
+    const originalLoadFromCache = window.loadFromCache;
+    if (originalLoadFromCache) {
+        window.loadFromCache = async function(endpoint) {
+            // Prüfe, ob es sich um einen Item-Endpoint handelt
+            const itemsTripMatch = endpoint.match(/^\/items\/trip\/(\d+)$/);
+            if (itemsTripMatch) {
+                console.log('[CACHE DEBUG] loadFromCache called for:', endpoint, 'db available:', !!window.db);
+                try {
+                    // Hole db Instanz über window.db oder den importierten db Verweis
+                    const dbInstance = window.db || (window.cacheLayer && window.cacheLayer._db);
+                    if (dbInstance) {
+                        const tripId = itemsTripMatch[1];
+                        console.log('[CACHE DEBUG] tripId from endpoint:', tripId);
+                        // Lade Items aus IndexedDB (enthält lokale Änderungen)
+                        const localItems = await dbInstance.getItemsByTrip(tripId);
+                        console.log('[CACHE DEBUG] localItems from IndexedDB:', localItems?.length || 0, 'items');
+                        if (localItems && localItems.length > 0) {
+                            // Merge lokale Änderungen in Server-Cache Items
+                            const cachedItems = await originalLoadFromCache(endpoint);
+                            const mergedItems = cachedItems.map(cachedItem => {
+                                const localItem = localItems.find(li => li.id === cachedItem.id);
+                                if (localItem) {
+                                    console.log('[CACHE DEBUG] Merge item', cachedItem.id, ': is_checked', cachedItem.is_checked, '->', localItem.is_checked);
+                                    return { ...cachedItem, is_checked: localItem.is_checked, updated_at: localItem.updated_at };
+                                }
+                                return cachedItem;
+                            });
+                            // Neue lokale Items hinzufügen, die nicht im Cache sind
+                            const cachedIds = new Set(cachedItems.map(i => i.id));
+                            localItems.forEach(li => {
+                                if (!cachedIds.has(li.id)) {
+                                    mergedItems.push(li);
+                                }
+                            });
+                            if (window.debugLog) window.debugLog.info('CACHE', '📝 Items gemergt aus IndexedDB (mit lokalen Änderungen): ' + mergedItems.length);
+                            return mergedItems;
+                        }
+                    } else {
+                        console.log('[CACHE DEBUG] Kein db verfügbar, versuche Server-Cache');
+                    }
+                } catch (dbErr) {
+                    console.warn('[CACHE DEBUG] IndexedDB-Lese fehlgeschlagen, versuche Server-Cache:', dbErr.message);
+                }
+            }
+            // Fallback auf Original (Server-Cache)
+            return originalLoadFromCache(endpoint);
+        };
+    }
+
+    // --- Patch: Merge pending operations into API responses ---
+    // WICHTIG: Wenn loadCurrentTrip Items von der API lädt, MUSS das Sync-Queue
+    // beruecksichtigt werden, da die Aenderungen noch nicht auf dem Server angekommen sind.
+    function mergePendingOperations(items, tripId) {
+        if (!items || !window.sync?.getPendingOperations) return items;
+        
+        // Hole ALLE pending item operations (nicht nach Trip filtern - das machen wir unten)
+        const allPendingOps = window.sync.getPendingOperations('items');
+
+        if (allPendingOps.length === 0) return items;
+        
+          
+        // Merge pending operations into items
+        const mergedItems = items.map(item => {
+          for (const op of allPendingOps) {
+                let applies = false;
+                if (op.entity_id && item.id === op.entity_id) {
+                    applies = true;
+                } else if (op.data && op.data.id && item.id === op.data.id) {
+                    applies = true;
+                }
+                
+                if (applies && op.operation === 'patch' && op.data.is_checked !== undefined) {
+                    console.log('[CACHE DEBUG] Merge pending patch op:', op.operation, 'item', item.id, 'is_checked:', item.is_checked, '->', op.data.is_checked);
+                    return { ...item, is_checked: op.data.is_checked };
+                }
+                if (applies && op.operation === 'delete') {
+                    // Item aus der Liste entfernen
+                    console.log('[CACHE DEBUG] Remove deleted item', item.id);
+                    return item; // Wird unten gefiltert
+                }
+            }
+            return item;
+        }).filter(item => {
+            // Entferne Items, die geloescht wurden
+            const deletedOps = allPendingOps.filter(op => op.operation === 'delete');
+            return !deletedOps.some(op => op.entity_id === item.id);
+        });
+        
+        // Neue Items hinzufügen (die noch nicht auf dem Server sind)
+        const createOps = allPendingOps.filter(op => op.operation === 'create');
+        createOps.forEach(op => {
+            const newItem = op.data;
+            if (newItem.id && !mergedItems.find(i => i.id === newItem.id)) {
+                mergedItems.push({ ...newItem, trip_id: parseInt(tripId) });
+            }
+        });
+        
+        return mergedItems;
+    }
+
+    // Patch originalApiRequest to merge pending ops for GET /items/trip/{id}
     const originalApiRequest = window.apiRequest;
 
     if (originalApiRequest) {
         window.apiRequest = async function(endpoint, method = 'GET', body = null) {
+            // Intercept GET /items/trip/{id} to merge pending operations
+            const itemsTripMatch = endpoint.match(/^\/items\/trip\/(\d+)$/);
+            
+            let result;
             try {
-                return await originalApiRequest(endpoint, method, body);
+                result = await originalApiRequest(endpoint, method, body);
             } catch (error) {
                 console.warn(`API request failed (${endpoint}):`, error.message);
-                onApiFailure();
+                if (window.debugLog) window.debugLog.error('API', '❌ ' + method + ' ' + endpoint + ': ' + error.message);
+                showOfflineBanner();
 
                 // Write operations: queue for sync
                 if (method !== 'GET') {
@@ -182,14 +342,30 @@ function applyPatches() {
                             entityId
                         );
                     }
+                    if (window.debugLog) window.debugLog.warn('API', '→ Operation in Warteschlange gelegt');
                     return null;
                 }
 
                 // GET operations: fallback to cache silently
+                if (window.debugLog) window.debugLog.warn('API', '→ Fallback auf Cache: ' + endpoint);
                 showOfflineBanner();
-                const cached = await loadFromCache(endpoint);
+                const cached = await window.loadFromCache(endpoint);
+                if (cached && cached.length > 0) {
+                    if (window.debugLog) window.debugLog.success('API', '✓ Cache bereitgestellt: ' + cached.length + ' Einträge');
+                } else {
+                    if (window.debugLog) window.debugLog.warn('API', '⚠ Kein Cachespeicher verfügbar');
+                }
                 return cached;
             }
+            
+            // Merge pending operations into item list responses
+            if (itemsTripMatch && result && Array.isArray(result)) {
+                const tripId = itemsTripMatch[1];
+                console.log('[CACHE DEBUG] apiRequest loaded', result.length, 'items for trip', tripId, 'with pending ops check');
+                return mergePendingOperations(result, tripId);
+            }
+            
+            return result;
         };
     }
 
@@ -280,7 +456,7 @@ function applyPatches() {
         };
     }
 
-    if (window.loadCurrentTrip) {
+   if (window.loadCurrentTrip) {
         const origLoadCurrentTrip = window.loadCurrentTrip;
         window.loadCurrentTrip = async function() {
             try {
@@ -383,7 +559,7 @@ function applyPatches() {
                     await db.open();
                     const auth = await db.getAuth();
                     if (!auth) {
-                        alert('Keine Sitzung im Cache. Bitte online anmelden.');
+                        showAlert('Keine Sitzung im Cache. Bitte online anmelden.');
                         return;
                     }
 
@@ -427,7 +603,7 @@ function applyPatches() {
                     return;
                 } catch (err) {
                     console.error('Offline trip creation failed:', err);
-                    alert('Fehler beim Erstellen des Trips im Offline-Modus: ' + err.message);
+                    showAlert('Fehler beim Erstellen des Trips im Offline-Modus: ' + err.message);
                     return;
                 }
             }
@@ -436,17 +612,286 @@ function applyPatches() {
             return await origGenerateTrip();
         };
     }
+
+  // --- Toggle item check with optimistic local save ---
+    // WICHTIG: Muss VOR dem Originalaufruf speichern, weil apiRequest bei Fehler null
+    // zurueckgibt (kein Error) und der try-Block in toggleItemCheck erfolgreich durchlaeuft.
+    // Ohne optimistisches Speichern waere die Aenderung nur in der UI und verschwindet
+    // beim naechsten loadCurrentTrip (das aus dem Cache neu rendert).
+    if (window.toggleItemCheck) {
+        const origToggleItemCheck = window.toggleItemCheck;
+        window.toggleItemCheck = async function(itemId, isChecked) {
+            // Optimistisch: Speichere SOFORT lokal, bevor die API aufgerufen wird
+            try {
+                if (!db._db) await db.open();
+                const auth = await db.getAuth();
+                const localToken = localStorage.getItem('authToken');
+                let accountId = auth?.account_id;
+                if (!accountId && localToken) {
+                    const stored = localStorage.getItem('_auth_account_id');
+                    if (stored) accountId = parseInt(stored);
+                }
+                if (accountId) {
+                    const existing = await db.get(db.STORES.ITEMS, itemId);
+                    if (existing) {
+                        await db.saveItem({ ...existing, is_checked: isChecked, updated_at: new Date().toISOString() });
+                        if (window.sync) {
+                            window.sync.queueOperation('items', 'patch', { is_checked: isChecked }, itemId);
+                        }
+                        if (window.debugLog) window.debugLog.info('CACHE', '✅ Item ' + itemId + ' lokal aktualisiert (optimistisch)');
+                    }
+                }
+            } catch (dbErr) {
+                console.error('Optimistic toggleItemCheck save failed:', dbErr);
+            }
+
+            // Dann Originalaufruf ausfuehren (UI-Update + API-Sync)
+            try {
+                return await origToggleItemCheck(itemId, isChecked);
+            } catch (err) {
+                // Wenn Original auch fehlaeuft und offline: UI manuell updaten als Fallback
+                if (!isOnline) {
+                    const itemRow = document.querySelector(`[data-item-id="${itemId}"]`);
+                    if (itemRow) {
+                        const checkbox = itemRow.querySelector('.product-item-checkbox');
+                        const nameSpan = itemRow.querySelector('.product-item-name');
+                        if (checkbox) checkbox.checked = isChecked;
+                        if (nameSpan) {
+                            if (isChecked) nameSpan.classList.add('item-checked');
+                            else nameSpan.classList.remove('item-checked');
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    // --- deleteItem: optimistisches Löschen VOR API-Aufruf ---
+    // WICHTIG: apiRequest gibt bei fehlgeschlagenen write-Op null zurueck (kein Error).
+    // Ohne optimistisches Loeschen bleibt die Aenderung nur in der UI und verschwindet
+    // beim naechsten loadCurrentTrip.
+    if (window.deleteItem) {
+        const origDeleteItem = window.deleteItem;
+        window.deleteItem = async function(itemId) {
+            if (window.debugLog) window.debugLog.info('CACHE', '🔄 deleteItem gestartet (optimistisch)');
+
+            // Immer: zuerst lokal löschen (optimistisch), dann API-Aufruf
+            let localDeleted = false;
+            try {
+                if (!db._db) await db.open();
+                const auth = await db.getAuth();
+                const localToken = localStorage.getItem('authToken');
+                let accountId = auth?.account_id;
+                if (!accountId && localToken) {
+                    const stored = localStorage.getItem('_auth_account_id');
+                    if (stored) accountId = parseInt(stored);
+                }
+                if (accountId) {
+                    const existing = await db.get(db.STORES.ITEMS, itemId);
+                    if (existing) {
+                        await db.delete(db.STORES.ITEMS, itemId);
+                        localDeleted = true;
+                        if (window.sync) {
+                            window.sync.queueOperation('items', 'delete', null, itemId);
+                        }
+                        if (window.debugLog) window.debugLog.info('CACHE', '✅ Item ' + itemId + ' lokal gelöscht (optimistisch)');
+                    }
+                }
+            } catch (dbErr) {
+                console.error('Optimistic deleteItem failed:', dbErr);
+            }
+
+            // Dann Originalaufruf (UI-Update + API-Sync)
+            try {
+                return await origDeleteItem(itemId);
+            } catch (err) {
+                // API-Fehler: lokale Löschung bleibt erhalten
+                if (window.debugLog) window.debugLog.warn('CACHE', 'API-Fehler beim Löschen, lokal bleibt gelöscht');
+                // UI manuell aktualisieren wenn Original fehlschlägt
+                const itemRow = document.querySelector(`[data-item-id="${itemId}"]`);
+                if (itemRow) itemRow.remove();
+                const itemsContainer = document.getElementById('active-trip-items');
+                if (itemsContainer && itemsContainer.children.length === 0) {
+                    itemsContainer.innerHTML = '<p class="text-muted">Noch keine Produkte ausgewählt.</p>';
+                }
+            }
+        };
+    }
+
+    // --- saveSpontaneousProduct: optimistisches Erstellen VOR API-Aufruf ---
+    if (window.saveSpontaneousProduct) {
+        const origSaveSpontaneousProduct = window.saveSpontaneousProduct;
+        window.saveSpontaneousProduct = async function() {
+            const name = document.getElementById('spontNameInput').value.trim();
+            const area_id = parseInt(document.getElementById('spontAreaSelect').value);
+            if (!name || isNaN(area_id)) return;
+
+            // Optimistisch: erst lokal speichern
+            try {
+                if (!db._db) await db.open();
+                const auth = await db.getAuth();
+                const localToken = localStorage.getItem('authToken');
+                let accountId = auth?.account_id;
+                if (!accountId && localToken) {
+                    const stored = localStorage.getItem('_auth_account_id');
+                    if (stored) accountId = parseInt(stored);
+                }
+                if (!accountId) {
+                    showAlert('Keine Sitzung im Cache. Bitte online gehen.');
+                    return;
+                }
+
+                if (!currentTripId) {
+                    const trips = await db.getAllTrips();
+                    const activeTrip = trips.find(t => !t.is_archived);
+                    if (activeTrip) currentTripId = activeTrip.id;
+                    else {
+                        showAlert('Kein aktiver Einkauf im Cache.');
+                        return;
+                    }
+                }
+
+                const newItem = {
+                    id: Date.now(),
+                    trip_id: currentTripId,
+                    name: name,
+                    is_checked: false,
+                    area_id: area_id,
+                    product_id: null,
+                    account_id: accountId,
+                    updated_at: new Date().toISOString(),
+                };
+
+                await db.saveItem(newItem);
+                if (window.sync) {
+                    window.sync.queueOperation('items', 'create', newItem, newItem.id);
+                }
+                if (window.debugLog) window.debugLog.info('CACHE', '✅ Item "' + name + '" lokal erstellt (optimistisch)');
+
+                // UI vorbereiten
+                document.getElementById('spontNameInput').value = '';
+                spontaneousModal.hide();
+            } catch (dbErr) {
+                console.error('Optimistic saveSpontaneousProduct failed:', dbErr);
+                showAlert('Fehler beim Erstellen im Cache: ' + dbErr.message);
+                return;
+            }
+
+            // Dann Originalaufruf (für API-Sync)
+            try {
+                return await origSaveSpontaneousProduct();
+            } catch (err) {
+                // API-Fehler: lokale Erstellung bleibt, aber neu rendern aus Cache
+                if (window.debugLog) window.debugLog.warn('CACHE', 'API-Fehler beim Erstellen, lokal bleibt erstellt');
+                // Neu rendern mit Cache-Daten
+                if (window.loadCurrentTrip) {
+                    await window.loadCurrentTrip();
+                }
+            }
+        };
+    }
+
+    // --- completeTrip: optimistisches Archivieren VOR API-Aufruf ---
+    if (window.completeTrip) {
+        const origCompleteTrip = window.completeTrip;
+        window.completeTrip = async function() {
+            if (!confirm('Einkauf abschließen und archivieren?')) return;
+
+            // Optimistisch: erst lokal archivieren
+            try {
+                if (!db._db) await db.open();
+                const auth = await db.getAuth();
+                const localToken = localStorage.getItem('authToken');
+                let accountId = auth?.account_id;
+                if (!accountId && localToken) {
+                    const stored = localStorage.getItem('_auth_account_id');
+                    if (stored) accountId = parseInt(stored);
+                }
+                if (!accountId) {
+                    showAlert('Keine Sitzung im Cache. Bitte online gehen.');
+                    return;
+                }
+
+                if (!currentTripId) {
+                    const trips = await db.getAllTrips();
+                    const activeTrip = trips.find(t => !t.is_archived);
+                    if (activeTrip) currentTripId = activeTrip.id;
+                    else {
+                        showAlert('Kein aktiver Einkauf im Cache.');
+                        return;
+                    }
+                }
+
+                const existing = await db.get(db.STORES.TRIPS, currentTripId);
+                if (existing) {
+                    await db.saveTrip({ ...existing, is_archived: true, updated_at: new Date().toISOString() });
+                    currentTripId = null;
+                    if (window.sync) {
+                        window.sync.queueOperation('trips', 'patch', { is_archived: true }, existing.id);
+                    }
+                    if (window.debugLog) window.debugLog.info('CACHE', '✅ Trip ' + existing.id + ' lokal archiviert (optimistisch)');
+                } else {
+                    showAlert('Trip nicht im Cache gefunden.');
+                    return;
+                }
+            } catch (dbErr) {
+                console.error('Optimistic completeTrip failed:', dbErr);
+                showAlert('Fehler beim Abschließen im Cache: ' + dbErr.message);
+                return;
+            }
+
+            // Dann Originalaufruf (für API-Sync)
+            try {
+                return await origCompleteTrip();
+            } catch (err) {
+                // API-Fehler: lokale Archivierung bleibt erhalten
+                if (window.debugLog) window.debugLog.warn('CACHE', 'API-Fehler beim Archivieren, lokal bleibt archiviert');
+               // Zur Verlauf-Seite wechseln
+                showPage('trip-history');
+            }
+        };
+    }
 }
 
 // Apply patches immediately - all modules are already imported
 applyPatches();
+
+// --- Auth persistence ---
+async function setAuth(authData) {
+    try {
+        await db.open();
+        const accountId = authData.user?.account_id;
+        // Speichert Auth mit account_id in IndexedDB UND localStorage (wichtig für Cache-Filterung)
+        const auth = {
+            id: 'session',
+            token: authData.token,
+            user: authData.user,
+            account_id: accountId,
+            updated_at: new Date().toISOString(),
+        };
+        await db.saveAuth(auth);
+        // Speichere account_id auch im localStorage für schnellen Zugriff
+        if (accountId) {
+            localStorage.setItem('_auth_account_id', String(accountId));
+        }
+        if (window.debugLog) window.debugLog.info('CACHE', '✅ Auth in IndexedDB gespeichert (account_id: ' + accountId + ')');
+    } catch (err) {
+        console.error('Failed to save auth to IndexedDB:', err);
+    }
+}
 
 // --- State restoration ---
 async function loadCachedData() {
     try {
         await db.open();
         const auth = await db.getAuth();
-        if (!auth) return {};
+        // Fallback: Wenn keine Auth in IndexedDB, verwende localStorage-Token
+        if (!auth) {
+            const localToken = localStorage.getItem('authToken');
+            if (!localToken) return {};
+            // Erstelle eine Dummy-Auth, damit getAllTrips etc. funktionieren
+            // (account_id ist für Trips/Items nicht nötig, da wir nach trip_id filtern)
+        }
 
         const [areas, products, trips] = await Promise.all([
             db.getAllAreas(),
@@ -464,13 +909,19 @@ async function loadCachedData() {
 }
 
 async function restoreState() {
-    const cached = await loadCachedData();
-
+    // Zuerst Auth laden und _auth_account_id speichern (brauchen wir für loadCachedData)
     const auth = await db.getAuth();
     if (auth?.token) {
         window.authToken = auth.token;
         localStorage.setItem('authToken', auth.token);
+        // Wichtig: account_id auch im localStorage speichern für alle Offline-Fallbacks
+        if (auth.account_id) {
+            localStorage.setItem('_auth_account_id', String(auth.account_id));
+        }
     }
+
+    // Jetzt erst die gecachten Daten laden (benötigen _auth_account_id)
+    const cached = await loadCachedData();
 
     if (cached.currentTripId) {
         window.currentTripId = cached.currentTripId;
@@ -484,6 +935,7 @@ window.cacheLayer = {
     loadCachedData,
     restoreState,
     loadFromCache,
+    setAuth,
 };
 
 // Auto-initialize

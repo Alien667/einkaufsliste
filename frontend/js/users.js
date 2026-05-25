@@ -33,11 +33,11 @@ async function handleCreateUser(e) {
             email: email,
             password: password
         });
-        alert('Nutzer erfolgreich angelegt!');
+        showAlert('Nutzer erfolgreich angelegt!');
         document.getElementById('user-create-form').reset();
         loadUsers();
     } catch (err) {
-        alert('Fehler beim Anlegen des Nutzers: ' + err.message);
+        showAlert('Fehler beim Anlegen des Nutzers: ' + err.message);
     }
 }
 
@@ -81,7 +81,7 @@ async function deleteUser(id) {
         await apiRequest(`/users/${id}`, 'DELETE');
         loadUsers();
     } catch (err) {
-        alert('Fehler beim Löschen: ' + err.message);
+        showAlert('Fehler beim Löschen: ' + err.message);
     }
 }
 

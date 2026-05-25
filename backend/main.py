@@ -513,7 +513,6 @@ def get_all_areas(
 @app.get("/sync/stream")
 async def sync_stream(
     token: str = "",
-    db: Session = Depends(get_db),
     auth_db: Session = Depends(get_auth_db),
 ):
     """

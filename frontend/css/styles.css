@@ -84,3 +84,166 @@
     border-radius: 4px;
     font-weight: bold;
 }
+
+/* ─── Debug Log Panel ─── */
+#debug-log-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10000;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    border-top: 2px solid #007acc;
+    max-height: 200px;
+    overflow-y: auto;
+    transition: max-height 0.3s ease;
+}
+
+#debug-log-panel.collapsed {
+    max-height: 36px;
+}
+
+#debug-log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    background: #2d2d2d;
+    cursor: pointer;
+    user-select: none;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+#debug-log-header:hover {
+    background: #383838;
+}
+
+#debug-log-header h6 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #cccccc;
+}
+
+#debug-log-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+#debug-log-controls button {
+    background: #3c3c3c;
+    border: 1px solid #555;
+    color: #ccc;
+    padding: 2px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 3px;
+    font-family: inherit;
+}
+
+#debug-log-controls button:hover {
+    background: #505050;
+}
+
+#debug-log-status {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+.status-online {
+    background: #28a745;
+    color: #fff;
+}
+
+.status-offline {
+    background: #dc3545;
+    color: #fff;
+}
+
+.status-connecting {
+    background: #ffc107;
+    color: #333;
+}
+
+#debug-log-entries {
+    padding: 4px 12px 8px;
+    line-height: 1.5;
+}
+
+.debug-entry {
+    padding: 1px 0;
+    border-bottom: 1px solid #2a2a2a;
+    word-break: break-all;
+}
+
+.debug-entry:last-child {
+    border-bottom: none;
+}
+
+.debug-time {
+    color: #888;
+    margin-right: 6px;
+}
+
+.debug-tag {
+    display: inline-block;
+    padding: 0 4px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: bold;
+    margin-right: 6px;
+    min-width: 52px;
+    text-align: center;
+}
+
+.tag-info    { background: #007acc; color: #fff; }
+.tag-success { background: #28a745; color: #fff; }
+.tag-error   { background: #dc3545; color: #fff; }
+.tag-warn    { background: #ffc107; color: #333; }
+.tag-sync    { background: #6f42c1; color: #fff; }
+.tag-fetch   { background: #17a2b8; color: #fff; }
+.tag-app     { background: #fd7e14; color: #fff; }
+.tag-cache   { background: #20c997; color: #fff; }
+.tag-sse     { background: #e83e8c; color: #fff; }
+
+.debug-msg {
+    color: #d4d4d4;
+}
+
+.debug-msg .debug-url {
+    color: #9cdcfe;
+}
+
+.debug-msg .debug-code {
+    color: #ce9178;
+}
+
+.debug-msg .debug-err {
+    color: #f44747;
+}
+
+/* Scrollbar styling for debug panel */
+#debug-log-panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+#debug-log-panel::-webkit-scrollbar-track {
+    background: #1e1e1e;
+}
+
+#debug-log-panel::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 3px;
+}
+
+#debug-log-panel::-webkit-scrollbar-thumb:hover {
+    background: #777;
+}

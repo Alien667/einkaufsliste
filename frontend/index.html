@@ -343,9 +343,10 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="js/config.js"></script>
+    <script src="js/debug-log.js"></script>
    <script type="module">
         import db from './db.js';
-        import { initApp } from './js/app.js';
+        import { initApp, initModals } from './js/app.js';
         import './sync.js';
         import './data-layer.js';
         import './js/cache-layer.js';
@@ -355,7 +356,10 @@
         document.addEventListener('DOMContentLoaded', () => {
             const loader = document.getElementById('app-loader');
             if (loader) loader.remove();
+            if (window.debugLog) window.debugLog.info('APP', '📦 DOMContentLoaded - App wird initialisiert');
+            initModals();
             initApp();
+            if (window.debugLog) window.debugLog.info('APP', '✅ initApp() aufgerufen');
         });
     </script>
 
@@ -369,6 +373,20 @@
                 <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Schließen"></button>
             </div>
         </div>
+    </div>
+
+    <!-- Debug Log Panel -->
+    <div id="debug-log-panel" class="collapsed">
+        <div id="debug-log-header" onclick="debugLog.toggle()">
+            <h6>🔍 Debug-Log</h6>
+            <div id="debug-log-controls">
+                <span id="debug-log-status" class="status-offline">Offline</span>
+                <button onclick="event.stopPropagation(); debugLog.clear()" title="Log leeren">Leeren</button>
+                <button onclick="event.stopPropagation(); debugLog.export()" title="Log exportieren">Export</button>
+                <span id="debug-log-entry-count" style="font-size:11px;color:#888;">0</span>
+            </div>
+        </div>
+        <div id="debug-log-entries"></div>
     </div>
 </body>
 </html>

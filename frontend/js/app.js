@@ -9,16 +9,24 @@ let isSuperuser = localStorage.getItem('isSuperuser') === 'true';
 // Bootstrap Modals
 let areaModal, productModal, spontaneousModal, accountModal;
 
-document.addEventListener('DOMContentLoaded', () => {
+// Bootstrap Modals werden initialisiert (wird vom Inline-Script nach import aufgerufen)
+function initModals() {
     areaModal = new bootstrap.Modal(document.getElementById('areaModal'));
     productModal = new bootstrap.Modal(document.getElementById('productModal'));
     spontaneousModal = new bootstrap.Modal(document.getElementById('spontaneousModal'));
     accountModal = new bootstrap.Modal(document.getElementById('accountModal'));
+}
 
-    initApp();
-});
+// Guard gegen doppelte initApp()-Aufrufe (wird vom Inline-Script aufgerufen)
+let _appInitialized = false;
 
 function initApp() {
+    if (_appInitialized) {
+        if (window.debugLog) window.debugLog.warn('APP', '⚠️ App bereits initialisiert, überspringe');
+        return;
+    }
+    _appInitialized = true;
+
     if (authToken) {
         showApp();
     } else {
@@ -62,6 +70,7 @@ function initApp() {
     }
 }
 async function showApp() {
+    if (window.debugLog) window.debugLog.success('APP', '👤 App anzeigen (angemeldet)');
     document.getElementById('auth-section').classList.add('d-none');
     document.getElementById('main-navbar').classList.remove('d-none');
     document.getElementById('main-app-container').classList.remove('d-none');
@@ -77,6 +86,7 @@ async function showApp() {
     });
 
     // Vorab die Stammdaten (Bereiche/Waren) laden, damit die erste Seite korrekt angezeigt wird
+    if (window.debugLog) window.debugLog.info('APP', '📥 Lade Bereiche und Produkte...');
     await loadProductsAndAreas();
     showPage('current-trip');
 }
@@ -168,9 +178,14 @@ async function handleLogin(e) {
         isSuperuser = data.user.is_superuser;
         localStorage.setItem('isSuperuser', isSuperuser);
 
+        // Speichert Auth in IndexedDB (wichtig für Offline-Fallback)
+        if (window.cacheLayer?.setAuth) {
+            window.cacheLayer.setAuth({ token: authToken, user: data.user });
+        }
+
         showApp();
     } catch (err) {
-        alert(err.message);
+        showAlert(err.message);
     }
 }
 
@@ -188,10 +203,10 @@ async function handleRegister(e) {
             email: email,
             password: password
         });
-        alert('Bestätigungs-E-Mail wurde gesendet! Bitte deinen Posteingang prüfen.');
+        showAlert('Bestätigungs-E-Mail wurde gesendet! Bitte deinen Posteingang prüfen.', 'success');
         showLogin();
     } catch (err) {
-        alert('Registrierung fehlgeschlagen: ' + err.message);
+        showAlert('Registrierung fehlgeschlagen: ' + err.message);
     }
 }
 
@@ -201,9 +216,9 @@ async function handlePasswordResetRequest(e) {
 
     try {
         await apiRequest('/auth/request-reset', 'POST', { email });
-        alert('Wenn die E-Mail registriert ist, wurde ein Link zum Zurücksetzen gesendet.');
+        showAlert('Wenn die E-Mail registriert ist, wurde ein Link zum Zurücksetzen gesendet.');
     } catch (err) {
-        alert('Fehler beim Anfordern des Passwort-Resets: ' + err.message);
+        showAlert('Fehler beim Anfordern des Passwort-Resets: ' + err.message);
     }
 }
 
@@ -213,7 +228,7 @@ async function handlePasswordResetSubmit(e) {
     const newPassword = document.getElementById('new-reset-password').value;
 
     if (!token) {
-        alert('Kein Reset-Token gefunden!');
+        showAlert('Kein Reset-Token gefunden!');
         return;
     }
 
@@ -222,21 +237,21 @@ async function handlePasswordResetSubmit(e) {
             token: token,
             new_password: newPassword
         });
-        alert('Passwort erfolgreich geändert!');
+        showAlert('Passwort erfolgreich geändert!');
         
         // URL bereinigen
         window.history.replaceState({}, document.title, window.location.pathname);
         
         showLogin();
     } catch (err) {
-        alert('Fehler beim Zurücksetzen des Passworts: ' + err.message);
+        showAlert('Fehler beim Zurücksetzen des Passworts: ' + err.message);
     }
 }
 
 async function handleVerifyEmail(token) {
     try {
         await apiRequest(`/auth/verify-email?token=${token}`, 'POST');
-        alert('E-Mail erfolgreich verifiziert!');
+        showAlert('E-Mail erfolgreich verifiziert!');
         
         // URL bereinigen
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -257,6 +272,7 @@ function logout() {
 // --- Navigation ---
 
 function showPage(pageId) {
+    if (window.debugLog) window.debugLog.info('APP', '📄 Seite: ' + pageId);
     document.querySelectorAll('.page-section').forEach(section => {
         section.classList.add('d-none');
     });
@@ -314,8 +330,9 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
         options.body = JSON.stringify(body);
     }
 
+    const url = `${window.APP_CONFIG.API_BASE_URL}${endpoint}`;
     try {
-        const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}${endpoint}`, options);
+        const response = await fetch(url, options);
         if (!response.ok) {
             const errorData = await response.json();
             // If unauthorized, clear token and redirect to login
@@ -328,8 +345,10 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
             }
             throw new Error(errorData.detail || 'API Error');
         }
+        if (window.debugLog) window.debugLog.success('API', method + ' → ' + response.status + ' ' + endpoint);
         return await response.json();
     } catch (error) {
+        // Nur einmal loggen (nicht auch in console.error patch)
         console.error(`API Request Error (${endpoint}):`, error);
         throw error;
     }
@@ -364,13 +383,13 @@ async function loadAreas() {
                 try {
                     await apiRequest('/areas/reorder', 'PATCH', { area_ids: newOrder });
                 } catch (err) {
-                    alert('Fehler beim Speichern der neuen Reihenfolge.');
+                    showAlert('Fehler beim Speichern der neuen Reihenfolge.');
                     loadAreas(); // Reload to revert
                 }
             }
         });
     } catch (err) {
-        alert('Fehler beim Laden der Bereiche.');
+        showAlert('Fehler beim Laden der Bereiche.');
     }
 }
 
@@ -398,7 +417,7 @@ async function startEditArea(id, iconElement) {
                 await apiRequest(`/areas/${id}`, 'PUT', { name: newName });
                 loadAreas();
             } catch (err) {
-                alert('Fehler beim Speichern.');
+                showAlert('Fehler beim Speichern.');
                 loadAreas();
             }
         } else {
@@ -430,7 +449,7 @@ async function saveArea() {
         areaModal.hide();
         loadAreas();
     } catch (err) {
-        alert('Bereich konnte nicht erstellt werden.');
+        showAlert('Bereich konnte nicht erstellt werden.');
     }
 }
 
@@ -440,7 +459,7 @@ async function deleteArea(id) {
         await apiRequest(`/areas/${id}`, 'DELETE');
         loadAreas();
     } catch (err) {
-        alert('Bereich konnte nicht gelöscht werden.');
+        showAlert('Bereich konnte nicht gelöscht werden.');
     }
 }
 
@@ -458,7 +477,7 @@ async function loadProductsAndAreas() {
         renderProductsList();
         updateProductAreaSelect();
     } catch (err) {
-        alert('Fehler beim Laden der Waren/Bereiche.');
+        showAlert('Fehler beim Laden der Waren/Bereiche.');
     }
 }
 
@@ -527,7 +546,7 @@ function renderProductsList() {
                     input.value = '';
                     loadProductsAndAreas();
                 } catch (err) {
-                    alert('Fehler beim Hinzufügen.');
+                    showAlert('Fehler beim Hinzufügen.');
                 }
             }
         };
@@ -572,7 +591,7 @@ async function startEditProduct(id, iconElement) {
                 });
                 loadProductsAndAreas();
             } catch (err) {
-                alert('Fehler beim Speichern.');
+                showAlert('Fehler beim Speichern.');
                 loadProductsAndAreas();
             }
         } else {
@@ -616,7 +635,7 @@ async function saveProduct() {
         productModal.hide();
         loadProductsAndAreas();
     } catch (err) {
-        alert('Ware konnte nicht gespeichert werden.');
+        showAlert('Ware konnte nicht gespeichert werden.');
     }
 }
 
@@ -626,7 +645,7 @@ async function deleteProduct(id) {
         await apiRequest(`/products/${id}`, 'DELETE');
         loadProductsAndAreas();
     } catch (err) {
-        alert('Ware konnte nicht gelöscht werden.');
+        showAlert('Ware konnte nicht gelöscht werden.');
     }
 }
 
@@ -643,7 +662,7 @@ async function prepareTripCreation() {
 
         renderTripCreationForm();
     } catch (err) {
-        alert('Fehler beim Vorbereiten des Einkaufs.');
+        showAlert('Fehler beim Vorbereiten des Einkaufs.');
     }
 }
 
@@ -714,10 +733,10 @@ async function generateTrip() {
         // Auswahl nach erfolgreichem Abschluss leeren
         localStorage.removeItem('selected_trip_products');
 
-        alert('Einkaufsliste wurde erstellt!');
+        showAlert('Einkaufsliste wurde erstellt!');
         showPage('current-trip');
     } catch (err) {
-        alert('Fehler beim Erstellen der Einkaufsliste.');
+        showAlert('Fehler beim Erstellen der Einkaufsliste.');
     }
 }
 
@@ -739,32 +758,16 @@ async function loadCurrentTrip() {
     const container = document.getElementById('active-trip-content');
     const completeBtn = document.getElementById('complete-trip-btn');
 
-    try {
-        // Find the most recent unarchived trip
-        const trips = await apiRequest('/trips');
-        const activeTrip = trips.find(t => !t.is_archived);
+    // Helper: Render trip items from an array of items (used by both online and offline paths)
+    function renderItems(items) {
+        const itemsContainer = document.getElementById('active-trip-items');
+        if (!itemsContainer) return;
+        itemsContainer.innerHTML = '';
 
-        if (!activeTrip) {
-            container.innerHTML = '<div class="alert alert-info">Kein aktiver Einkauf gefunden. Erstelle einen neuen!</div>';
-            completeBtn.classList.add('d-none');
+        if (!items || items.length === 0) {
+            itemsContainer.innerHTML = '<p class="text-muted">Noch keine Produkte ausgewählt.</p>';
             return;
         }
-
-        currentTripId = activeTrip.id;
-        completeBtn.classList.remove('d-none');
-
-        // Re-render the dynamic parts of the container
-        container.innerHTML = `
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="h6">Spontane Ware hinzufügen</h5>
-                <button class="btn btn-sm btn-outline-secondary" onclick="openSpontaneousProductModal()">+</button>
-            </div>
-            <div id="spontaneous-product-container"></div>
-            <div id="active-trip-items"></div>
-        `;
-
-        const itemsContainer = document.getElementById('active-trip-items');
-        const items = await apiRequest(`/items/trip/${currentTripId}`);
 
         // 1. Render items for each area in the order they are defined (sorted by position)
         areas.forEach(area => {
@@ -809,11 +812,101 @@ async function loadCurrentTrip() {
                 itemsContainer.appendChild(itemDiv);
             });
         }
-    } catch (err) {
-        console.error(err);
-        container.innerHTML = '<div class="alert alert-danger">Fehler beim Laden des Einkaufs.</div>';
+    }
+
+    // Helper: Try to get cached active trip from IndexedDB
+    async function getActiveTripFromCache() {
+        try {
+            // Stelle sicher, dass IndexedDB geöffnet ist
+            if (!db._db) {
+                await db.open();
+            }
+
+            const storedAuth = localStorage.getItem('authToken');
+            const idbAuth = await db.getAuth().catch(() => null);
+
+            // Wenn kein User authentifiziert ist, kein Cache verfügbar
+            if (!storedAuth && !idbAuth?.account_id) {
+                return null;
+            }
+
+            const trips = await db.getAllTrips();
+            return trips.find(t => !t.is_archived) || null;
+        } catch (err) {
+            console.error('Cache-Lese fehlgeschlagen:', err);
+            return null;
+        }
+    }
+
+    // Helper: Try to get cached items for a trip from IndexedDB
+    async function getItemsFromCache(tripId) {
+        try {
+            if (!db._db) {
+                await db.open();
+            }
+            return await db.getItemsByTrip(tripId);
+        } catch (err) {
+            console.error('Cache-Lese fehlgeschlagen:', err);
+            return [];
+        }
+    }
+
+    try {
+        // Try to load active trip from API
+        const trips = await apiRequest('/trips');
+        const activeTrip = trips.find(t => !t.is_archived);
+
+        if (!activeTrip) {
+            container.innerHTML = '<div class="alert alert-info">Kein aktiver Einkauf gefunden. Erstelle einen neuen!</div>';
+            completeBtn.classList.add('d-none');
+            return;
+        }
+
+        currentTripId = activeTrip.id;
+        completeBtn.classList.remove('d-none');
+
+        // Re-render the dynamic parts of the container
+        container.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="h6">Spontane Ware hinzufügen</h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="openSpontaneousProductModal()">+</button>
+            </div>
+            <div id="spontaneous-product-container"></div>
+            <div id="active-trip-items"></div>
+        `;
+
+        const items = await apiRequest(`/items/trip/${currentTripId}`);
+        renderItems(items);
+   } catch (err) {
+        console.error('loadCurrentTrip API error, falling back to cache:', err);
+
+        // Fallback: Try to load from IndexedDB cache
+        const activeTrip = await getActiveTripFromCache();
+
+        if (!activeTrip) {
+            container.innerHTML = '<div class="alert alert-info">⚠️ Offline – Kein aktiver Einkauf im Cache. Erstelle einen neuen!</div>';
+            completeBtn.classList.add('d-none');
+            return;
+        }
+
+        currentTripId = activeTrip.id;
+        completeBtn.classList.remove('d-none');
+
+        container.innerHTML = `
+            <div class="alert alert-warning">⚠️ Offline – Daten aus dem Cache</div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="h6">Spontane Ware hinzufügen</h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="openSpontaneousProductModal()">+</button>
+            </div>
+            <div id="spontaneous-product-container"></div>
+            <div id="active-trip-items"></div>
+        `;
+
+        const items = await getItemsFromCache(activeTrip.id);
+        renderItems(items);
     }
 }
+
 async function toggleItemCheck(itemId, isChecked) {
     const itemRow = document.querySelector(`[data-item-id="${itemId}"]`);
     try {
@@ -890,7 +983,7 @@ async function saveSpontaneousProduct() {
         spontaneousModal.hide();
         loadCurrentTrip();
     } catch (err) {
-        alert('Fehler beim Hinzufügen.');
+        showAlert('Fehler beim Hinzufügen.');
     }
 }
 
@@ -924,7 +1017,7 @@ async function loadTripHistory() {
             list.appendChild(item);
         });
     } catch (err) {
-        alert('Fehler beim Laden des Verlaufs. ' + err);
+        showAlert('Fehler beim Laden des Verlaufs. ' + err);
     }
 }
 
@@ -970,7 +1063,7 @@ async function viewTripDetail(tripId) {
             });
         }
     } catch (err) {
-        alert('Fehler beim Laden der Details.');
+        showAlert('Fehler beim Laden der Details.');
     }
 }
 
@@ -1021,7 +1114,7 @@ async function loadAdminDashboard() {
         }
     } catch (err) {
         console.error(err);
-        alert('Fehler beim Laden des Admin-Dashboards.');
+        showAlert('Fehler beim Laden des Admin-Dashboards.');
     }
 }
 
@@ -1038,7 +1131,7 @@ async function saveAdminAccount() {
         accountModal.hide();
         loadAdminDashboard();
     } catch (err) {
-        alert('Account konnte nicht erstellt werden.');
+        showAlert('Account konnte nicht erstellt werden.');
     }
 }
 
@@ -1048,7 +1141,7 @@ async function deleteAdminAccount(id) {
         await apiRequest(`/admin/accounts/${id}`, 'DELETE');
         loadAdminDashboard();
     } catch (err) {
-        alert('Account konnte nicht gelöscht werden.');
+        showAlert('Account konnte nicht gelöscht werden.');
     }
 }
 
@@ -1056,10 +1149,10 @@ async function promoteUserAdmin(id) {
     if (!confirm('Diesen Nutzer zum Superuser befördern?')) return;
     try {
         await apiRequest(`/admin/users/${id}/promote`, 'PATCH');
-        alert('Nutzer wurde befördert!');
+        showAlert('Nutzer wurde befördert!');
         loadAdminDashboard();
     } catch (err) {
-        alert('Fehler beim Befördern.');
+        showAlert('Fehler beim Befördern.');
     }
 }
 
@@ -1094,4 +1187,4 @@ window.viewTripDetail = viewTripDetail;
 window.hideHistoryDetail = hideHistoryDetail;
 window.openAccountModal = openAccountModal;
 
-export { initApp };
+export { initApp, initModals };
