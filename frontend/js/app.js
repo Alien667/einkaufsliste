@@ -754,53 +754,30 @@ function updateSelectedProducts(productId, isChecked) {
 
 // --- Page 4: Current Trip ---
 
-async function loadCurrentTrip() {
-    const container = document.getElementById('active-trip-content');
-    const completeBtn = document.getElementById('complete-trip-btn');
+/**
+ * Rendert eine Liste von Items für den aktuellen Trip.
+ * Gruppenweise nach areas (sortiert nach position), danach "Sonstiges".
+ */
+function renderItems(items) {
+    const itemsContainer = document.getElementById('active-trip-items');
+    if (!itemsContainer) return;
+    itemsContainer.innerHTML = '';
 
-    // Helper: Render trip items from an array of items (used by both online and offline paths)
-    function renderItems(items) {
-        const itemsContainer = document.getElementById('active-trip-items');
-        if (!itemsContainer) return;
-        itemsContainer.innerHTML = '';
+    if (!items || items.length === 0) {
+        itemsContainer.innerHTML = '<p class="text-muted">Noch keine Produkte ausgewählt.</p>';
+        return;
+    }
 
-        if (!items || items.length === 0) {
-            itemsContainer.innerHTML = '<p class="text-muted">Noch keine Produkte ausgewählt.</p>';
-            return;
-        }
-
-        // 1. Render items for each area in the order they are defined (sorted by position)
-        areas.forEach(area => {
-            const areaItems = items.filter(item => item.area_id === area.id);
-            if (areaItems.length > 0) {
-                const areaHeader = document.createElement('div');
-                areaHeader.className = 'area-group-header';
-                areaHeader.innerText = area.name;
-                itemsContainer.appendChild(areaHeader);
-
-                areaItems.forEach(item => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = 'product-item-row';
-                    itemDiv.setAttribute('data-item-id', item.id);
-                    itemDiv.innerHTML = `
-                        <input class="form-check-input product-item-checkbox" type="checkbox" ${item.is_checked ? 'checked' : ''} onchange="toggleItemCheck(${item.id}, this.checked)">
-                        <span class="product-item-name ${item.is_checked ? 'item-checked' : ''}">${item.name}</span>
-                        <button class="btn btn-sm text-danger" onclick="deleteItem(${item.id})">&times;</button>
-                    `;
-                    itemsContainer.appendChild(itemDiv);
-                });
-            }
-        });
-
-        // 2. Render "Sonstiges" items (those without an area_id) at the end
-        const unknownItems = items.filter(item => !item.area_id);
-        if (unknownItems.length > 0) {
+    // 1. Items für jede Area rendern (in definierter Reihenfolge)
+    areas.forEach(area => {
+        const areaItems = items.filter(item => item.area_id === area.id);
+        if (areaItems.length > 0) {
             const areaHeader = document.createElement('div');
             areaHeader.className = 'area-group-header';
-            areaHeader.innerText = 'Sonstiges';
+            areaHeader.innerText = area.name;
             itemsContainer.appendChild(areaHeader);
 
-            unknownItems.forEach(item => {
+            areaItems.forEach(item => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'product-item-row';
                 itemDiv.setAttribute('data-item-id', item.id);
@@ -812,125 +789,210 @@ async function loadCurrentTrip() {
                 itemsContainer.appendChild(itemDiv);
             });
         }
+    });
+
+    // 2. "Sonstiges" items ohne area_id am Ende
+    const unknownItems = items.filter(item => !item.area_id);
+    if (unknownItems.length > 0) {
+        const areaHeader = document.createElement('div');
+        areaHeader.className = 'area-group-header';
+        areaHeader.innerText = 'Sonstiges';
+        itemsContainer.appendChild(areaHeader);
+
+        unknownItems.forEach(item => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'product-item-row';
+            itemDiv.setAttribute('data-item-id', item.id);
+            itemDiv.innerHTML = `
+                <input class="form-check-input product-item-checkbox" type="checkbox" ${item.is_checked ? 'checked' : ''} onchange="toggleItemCheck(${item.id}, this.checked)">
+                <span class="product-item-name ${item.is_checked ? 'item-checked' : ''}">${item.name}</span>
+                <button class="btn btn-sm text-danger" onclick="deleteItem(${item.id})">&times;</button>
+            `;
+            itemsContainer.appendChild(itemDiv);
+        });
     }
+}
 
-    // Helper: Try to get cached active trip from IndexedDB
-    async function getActiveTripFromCache() {
-        try {
-            // Stelle sicher, dass IndexedDB geöffnet ist
-            if (!db._db) {
-                await db.open();
+/**
+ * Wendet pending (nicht-synchronisierte) Operationen auf eine Item-Liste an.
+ * Merge-Logik aus cache-layer.js hier dupliziert, damit der Cache-Pfad
+ * unabhängig vom API-Pfad funktioniert.
+ */
+function applyPendingOpsToItems(items) {
+    if (!items || !window.sync?.getPendingOperations) return items;
+
+    const allPendingOps = window.sync.getPendingOperations('items');
+    if (allPendingOps.length === 0) return items;
+
+    // Patch is_checked und filtere gelöschte Items
+    let merged = items.map(item => {
+        for (const op of allPendingOps) {
+            const targetId = op.entity_id || (op.data && op.data.id);
+            if (targetId && item.id === targetId) {
+                if (op.operation === 'patch' && op.data.is_checked !== undefined) {
+                    return { ...item, is_checked: op.data.is_checked };
+                }
+                if (op.operation === 'delete') {
+                    return null; // Markiert zum Filtern
+                }
             }
-
-            const storedAuth = localStorage.getItem('authToken');
-            const idbAuth = await db.getAuth().catch(() => null);
-
-            // Wenn kein User authentifiziert ist, kein Cache verfügbar
-            if (!storedAuth && !idbAuth?.account_id) {
-                return null;
-            }
-
-            const trips = await db.getAllTrips();
-            return trips.find(t => !t.is_archived) || null;
-        } catch (err) {
-            console.error('Cache-Lese fehlgeschlagen:', err);
-            return null;
         }
-    }
+        return item;
+    }).filter(Boolean); // gelöschte Items entfernen
 
-    // Helper: Try to get cached items for a trip from IndexedDB
-    async function getItemsFromCache(tripId) {
-        try {
-            if (!db._db) {
-                await db.open();
-            }
-            return await db.getItemsByTrip(tripId);
-        } catch (err) {
-            console.error('Cache-Lese fehlgeschlagen:', err);
-            return [];
+    // Neue Items hinzufügen (noch nicht auf Server)
+    allPendingOps.filter(op => op.operation === 'create').forEach(op => {
+        const newItem = op.data;
+        if (newItem.id && !merged.find(i => i.id === newItem.id)) {
+            merged.push({ ...newItem });
         }
+    });
+
+    return merged;
+}
+
+/**
+ * Lädt den aktiven Trip aus dem IndexedDB-Cache und rendert ihn.
+ * Startet im Hintergrund einen API-Sync, um den Cache zu aktualisieren.
+ */
+async function loadCurrentTrip() {
+    const container = document.getElementById('active-trip-content');
+    const completeBtn = document.getElementById('complete-trip-btn');
+
+    // Container-Struktur sicherstellen (wird von beiden Pfaden verwendet)
+    function ensureContainerStructure(offlineWarning) {
+        container.innerHTML = '';
+        if (offlineWarning) {
+            const banner = document.createElement('div');
+            banner.className = 'alert alert-warning';
+            banner.textContent = '⚠️ Offline – Daten aus dem Cache';
+            container.appendChild(banner);
+        }
+        const header = document.createElement('div');
+        header.className = 'd-flex justify-content-between align-items-center mb-3';
+        header.innerHTML = `
+            <h5 class="h6">Spontane Ware hinzufügen</h5>
+            <button class="btn btn-sm btn-outline-secondary" onclick="openSpontaneousProductModal()">+</button>
+        `;
+        container.appendChild(header);
+        const itemContainer = document.createElement('div');
+        itemContainer.id = 'active-trip-items';
+        container.appendChild(itemContainer);
     }
 
+    // --- Cache-first: Sofortigen Zustand laden ---
+    let cachedTrip = null;
+    let cachedItems = [];
     try {
-        // Try to load active trip from API
-        const trips = await apiRequest('/trips');
-        const activeTrip = trips.find(t => !t.is_archived);
+        await db.open();
+        const trips = await db.getAllTrips();
+        cachedTrip = trips.find(t => !t.is_archived) || null;
+        if (cachedTrip) {
+            cachedItems = await db.getItemsByTrip(cachedTrip.id);
+        }
+    } catch (err) {
+        console.warn('Cache-Lese fehlgeschlagen:', err);
+    }
+
+    if (cachedTrip) {
+        // Soforthin rendern – kein Warten auf API
+        currentTripId = cachedTrip.id;
+        completeBtn.classList.remove('d-none');
+        ensureContainerStructure(false);
+
+        // Pending operations anwenden (lokale Änderungen, die noch nicht gesynct sind)
+        cachedItems = applyPendingOpsToItems(cachedItems);
+        renderItems(cachedItems);
+
+        // --- Hintergrund: Mit Server synchronisieren ---
+        syncCurrentTripInBg(completeBtn, container);
+    } else {
+        // Kein Cache-Trip → versuche API
+        ensureContainerStructure(false);
+        try {
+            const apiTrips = await apiRequest('/trips');
+            const activeTrip = apiTrips?.find(t => !t.is_archived);
+
+            if (!activeTrip) {
+                container.innerHTML = '<div class="alert alert-info">Kein aktiver Einkauf gefunden. Erstelle einen neuen!</div>';
+                completeBtn.classList.add('d-none');
+                return;
+            }
+
+            currentTripId = activeTrip.id;
+            completeBtn.classList.remove('d-none');
+            const apiItems = await apiRequest(`/items/trip/${activeTrip.id}`);
+            renderItems(apiItems);
+
+            // Cache aktualisieren (wird von cache-layer.js gemacht, wenn apiRequest erfolgreich war)
+        } catch (err) {
+            // Kein API, kein Cache
+            ensureContainerStructure(true);
+            completeBtn.classList.add('d-none');
+            container.innerHTML = '<div class="alert alert-warning">⚠️ Offline – Kein aktiver Einkauf im Cache. Erstelle einen neuen!</div>';
+        }
+    }
+}
+
+/**
+ * Hintergrund-Sync: Holt aktuelle Daten vom Server und aktualisiert den Cache.
+ * Wird nach dem sofortigen Cache-Render gestartet – blockiert die UI nicht.
+ */
+async function syncCurrentTripInBg(completeBtn, container) {
+    const previousTripId = currentTripId;
+    try {
+        // Aktuellen Trip von API holen
+        const apiTrips = await apiRequest('/trips');
+        const activeTrip = apiTrips?.find(t => !t.is_archived);
 
         if (!activeTrip) {
-            container.innerHTML = '<div class="alert alert-info">Kein aktiver Einkauf gefunden. Erstelle einen neuen!</div>';
-            completeBtn.classList.add('d-none');
+            // Trip wurde zwischenzeitlich archiviert
+            if (previousTripId) {
+                completeBtn.classList.add('d-none');
+            }
             return;
         }
 
         currentTripId = activeTrip.id;
         completeBtn.classList.remove('d-none');
 
-        // Re-render the dynamic parts of the container
-        container.innerHTML = `
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="h6">Spontane Ware hinzufügen</h5>
-                <button class="btn btn-sm btn-outline-secondary" onclick="openSpontaneousProductModal()">+</button>
-            </div>
-            <div id="spontaneous-product-container"></div>
-            <div id="active-trip-items"></div>
-        `;
-
-        const items = await apiRequest(`/items/trip/${currentTripId}`);
-        renderItems(items);
-   } catch (err) {
-        console.error('loadCurrentTrip API error, falling back to cache:', err);
-
-        // Fallback: Try to load from IndexedDB cache
-        const activeTrip = await getActiveTripFromCache();
-
-        if (!activeTrip) {
-            container.innerHTML = '<div class="alert alert-info">⚠️ Offline – Kein aktiver Einkauf im Cache. Erstelle einen neuen!</div>';
-            completeBtn.classList.add('d-none');
-            return;
+        // Items von API holen — mergePendingOps wird bereits durch den
+        // apiRequest-Patch in cache-layer.js automatisch durchgeführt.
+        const apiItems = await apiRequest(`/items/trip/${activeTrip.id}`);
+        renderItems(apiItems);
+    } catch (err) {
+        // Still silently failed – UI zeigt bereits Cache-Daten
+        if (window.debugLog) {
+            window.debugLog.warn('SYNC-BG', 'Hintergrund-Sync für aktuellen Trip fehlgeschlagen: ' + err.message);
         }
-
-        currentTripId = activeTrip.id;
-        completeBtn.classList.remove('d-none');
-
-        container.innerHTML = `
-            <div class="alert alert-warning">⚠️ Offline – Daten aus dem Cache</div>
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="h6">Spontane Ware hinzufügen</h5>
-                <button class="btn btn-sm btn-outline-secondary" onclick="openSpontaneousProductModal()">+</button>
-            </div>
-            <div id="spontaneous-product-container"></div>
-            <div id="active-trip-items"></div>
-        `;
-
-        const items = await getItemsFromCache(activeTrip.id);
-        renderItems(items);
     }
 }
 
 async function toggleItemCheck(itemId, isChecked) {
     const itemRow = document.querySelector(`[data-item-id="${itemId}"]`);
-    try {
-        await apiRequest(`/items/${itemId}/check?is_checked=${isChecked}`, 'PATCH');
-        
-        if (itemRow) {
-            const checkbox = itemRow.querySelector('.product-item-checkbox');
-            const nameSpan = itemRow.querySelector('.product-item-name');
-            
-            if (checkbox) checkbox.checked = isChecked;
-            if (nameSpan) {
-                if (isChecked) {
-                    nameSpan.classList.add('item-checked');
-                } else {
-                    nameSpan.classList.remove('item-checked');
-                }
+
+    // Optimistisches UI-Update: sofort anwenden, damit es auch offline sofort sichtbar ist
+    if (itemRow) {
+        const checkbox = itemRow.querySelector('.product-item-checkbox');
+        const nameSpan = itemRow.querySelector('.product-item-name');
+
+        if (checkbox) checkbox.checked = isChecked;
+        if (nameSpan) {
+            if (isChecked) {
+                nameSpan.classList.add('item-checked');
+            } else {
+                nameSpan.classList.remove('item-checked');
             }
         }
+    }
+
+    try {
+        await apiRequest(`/items/${itemId}/check?is_checked=${isChecked}`, 'PATCH');
     } catch (err) {
+        // UI bleibt im optimistischen Zustand - cache-layer.js hat die Operation
+        // bereits in die LocalDB geschrieben und in die Sync-Queue genommen.
+        // Der Hintergrund-Sync bringt den API-Call spaeter nach.
         console.error(err);
-        if (itemRow) {
-            const checkbox = itemRow.querySelector('.product-item-checkbox');
-            if (checkbox) checkbox.checked = !isChecked;
-        }
     }
 }
 

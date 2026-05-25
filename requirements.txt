@@ -9,3 +9,4 @@ pydantic[email]
 python-dateutil
 bcrypt==4.0.1
 dotenv
+sse_starlette

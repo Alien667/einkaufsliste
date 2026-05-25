@@ -456,64 +456,9 @@ function applyPatches() {
         };
     }
 
-   if (window.loadCurrentTrip) {
-        const origLoadCurrentTrip = window.loadCurrentTrip;
-        window.loadCurrentTrip = async function() {
-            try {
-                return await origLoadCurrentTrip();
-            } catch (err) {
-                console.error('loadCurrentTrip failed, using cache:', err);
-                if (!currentTripId) return;
-                try {
-                    const items = await loadFromCache(`/items/trip/${currentTripId}`);
-                    const container = document.getElementById('current-trip-items');
-                    if (!container) return;
-                    container.innerHTML = '';
-
-                    const groupedByArea = {};
-                    const uncategorizedItems = [];
-
-                    items.forEach(item => {
-                        if (item.area_id) {
-                            if (!groupedByArea[item.area_id]) groupedByArea[item.area_id] = [];
-                            groupedByArea[item.area_id].push(item);
-                        } else {
-                            uncategorizedItems.push(item);
-                        }
-                    });
-
-                    areas.forEach(area => {
-                        const areaItems = groupedByArea[area.id] || [];
-                        if (areaItems.length > 0) {
-                            const areaSection = document.createElement('div');
-                            areaSection.className = 'mb-4';
-                            areaSection.innerHTML = `
-                                <h5 class="border-bottom pb-2 mb-3">${area.name}</h5>
-                                ${areaItems.map(item => createItemHTML(item)).join('')}
-                            `;
-                            container.appendChild(areaSection);
-                        }
-                    });
-
-                    if (uncategorizedItems.length > 0) {
-                        const otherSection = document.createElement('div');
-                        otherSection.className = 'mb-4';
-                        otherSection.innerHTML = `
-                            <h5 class="border-bottom pb-2 mb-3">Sonstige</h5>
-                            ${uncategorizedItems.map(item => createItemHTML(item)).join('')}
-                        `;
-                        container.appendChild(otherSection);
-                    }
-
-                    if (items.length === 0) {
-                        container.innerHTML = '<p class="text-muted">Noch keine Produkte ausgewählt.</p>';
-                    }
-                } catch (cacheErr) {
-                    console.error('Cache fallback failed:', cacheErr);
-                }
-            }
-        };
-    }
+    // loadCurrentTrip wurde zu cache-first umgebaut und handhabt
+    // intern sowohl Cache-Lese als auch Hintergrund-Sync.
+    // Der alte Wrapper hier ist nicht mehr nötig.
 
     if (window.loadTripHistory) {
         const origLoadTripHistory = window.loadTripHistory;
