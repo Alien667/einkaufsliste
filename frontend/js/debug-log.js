@@ -206,7 +206,6 @@
     window.addEventListener('offline', () => {
         _isOnline = false;
         debugLog.setOnline(false);
-        debugLog.warn('EVENT', '📴 Browser: offline');
     });
 
     // Patch window.fetch to log all HTTP requests
@@ -282,9 +281,18 @@
         };
     })();
 
-    // Log initial state
-    debugLog.setOnline(_isOnline);
-    debugLog.info('APP', '🚀 Debug-Log initialisiert (Online: ' + _isOnline + ')');
-    _updateToggleIcon(); // Icon-Status auf Initialzustell anpassen
+    // Log initial state (verzögert, damit DOM-Elemente existieren)
+    function initStatus() {
+        debugLog.setOnline(_isOnline);
+        debugLog.info('APP', '🚀 Debug-Log initialisiert (Online: ' + _isOnline + ')');
+        _updateToggleIcon(); // Icon-Status auf Initialzustell anpassen
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initStatus);
+    } else {
+        // DOM ist bereits bereit (z.B. wenn Script schon geparst wurde)
+        initStatus();
+    }
 
 })();

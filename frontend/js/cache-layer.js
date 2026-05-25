@@ -18,7 +18,6 @@ window.addEventListener('online', () => {
 
 window.addEventListener('offline', () => {
     isOnline = false;
-    if (window.debugLog) window.debugLog.warn('CACHE', '📴 System: offline');
     showOfflineBanner();
     if (window.cacheLayer) window.cacheLayer.onOffline?.();
 });
@@ -98,6 +97,7 @@ async function cacheApiResponse(url, data) {
 
         // Server.updated_at priorisieren — der Server ist die autoritative Quelle.
         // Client-Zeit nur als Fallback, wenn der Server keinen Wert mitteilt.
+        const now = new Date().toISOString();
 
         if (url.includes('/areas') && !url.includes('with-products') && Array.isArray(data)) {
             for (const area of data) {

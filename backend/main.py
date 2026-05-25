@@ -879,7 +879,7 @@ async def sync_operations(
                 db.commit()
                 db.refresh(trip)
                 _broadcast_change(account_id, "trips", trip.id, "create", {
-                    "id": trip.id, "name": trip.name, "account_id": trip.account_id,
+                    "id": trip.id, "account_id": trip.account_id,
                     "updated_at": trip.updated_at.isoformat()
                 })
                 results.append({
@@ -900,7 +900,7 @@ async def sync_operations(
                     db.commit()
                     db.refresh(existing)
                     _broadcast_change(account_id, "trips", existing.id, "patch", {
-                        "id": existing.id, "name": existing.name, "account_id": existing.account_id,
+                        "id": existing.id, "account_id": existing.account_id,
                         "updated_at": existing.updated_at.isoformat(),
                         "is_archived": existing.is_archived,
                     })

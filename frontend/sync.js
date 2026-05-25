@@ -34,12 +34,8 @@ function updateOnlineStatus(online) {
 
     // Debug logging
     if (window.debugLog) {
-        if (wasOnline && !online) {
-            window.debugLog.warn('SYNC', '🔴 Verbindung getrennt (Backend nicht erreichbar?)');
-        } else if (!wasOnline && online) {
+        if (!wasOnline && online) {
             window.debugLog.success('SYNC', '🟢 Verbindung wiederhergestellt');
-        } else {
-            // Same state, just update
         }
     }
 
@@ -58,10 +54,8 @@ function updateOnlineStatus(online) {
         }
     }
 
-    // Status-Änderungen nur im Log, keine Toasts
-    if (!online) {
-        if (window.debugLog) window.debugLog.warn('SYNC', 'Verbindung getrennt. Änderungen werden lokal gespeichert.');
-    } else if (eventSource) {
+    // Wieder-Verbindungs-Log
+    if (online && eventSource) {
         if (window.debugLog) window.debugLog.info('SYNC', 'Wieder online. Synchronisiere...');
     }
 }
@@ -470,6 +464,22 @@ async function fullSync() {
     }
 }
 
+// --- Server Reachability Check ---
+async function checkServerReachable() {
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        const response = await fetch(`${CONFIG.API_BASE}/sync/changes?since=0`, {
+            method: 'GET',
+            signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        return response.status >= 200 && response.status < 600;
+    } catch {
+        return false;
+    }
+}
+
 // --- Initialization ---
 async function initSync() {
     if (window.debugLog) window.debugLog.info('SYNC', '🚀 Synchronisation wird initialisiert...');
@@ -494,7 +504,6 @@ async function initSync() {
     });
 
     window.addEventListener('offline', () => {
-        if (window.debugLog) window.debugLog.info('SYNC', '📴 System-Event: offline');
         updateOnlineStatus(false);
         if (eventSource) {
             eventSource.close();
@@ -523,9 +532,11 @@ async function initSync() {
         },
     };
 
-    // Initial sync
-    if (navigator.onLine) {
-        if (window.debugLog) window.debugLog.success('SYNC', 'System initial: Online');
+    // Initial sync - echte Server-Verfügbarkeit prüfen (nicht nur navigator.onLine)
+    const serverReachable = await checkServerReachable();
+
+    if (serverReachable) {
+        if (window.debugLog) window.debugLog.success('SYNC', 'System initial: Server erreichbar');
         updateOnlineStatus(true);
         connectSSE();
 
@@ -535,7 +546,7 @@ async function initSync() {
         // Start periodic polling as backup
         setInterval(pollForChanges, 60000); // Every minute
     } else {
-        if (window.debugLog) window.debugLog.warn('SYNC', 'System initial: Offline');
+        if (window.debugLog) window.debugLog.warn('SYNC', 'System initial: Server nicht erreichbar');
         updateOnlineStatus(false);
     }
 
