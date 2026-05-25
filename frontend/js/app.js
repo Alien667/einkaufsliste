@@ -5,6 +5,7 @@ let products = [];
 let trips = [];
 let authToken = localStorage.getItem('authToken');
 let isSuperuser = localStorage.getItem('isSuperuser') === 'true';
+let filterOpenOnly = true; // Standard: nur offene Waren anzeigen
 
 // Bootstrap Modals
 let areaModal, productModal, spontaneousModal, accountModal;
@@ -765,13 +766,21 @@ function renderItems(items) {
     if (!itemsContainer) return;
     itemsContainer.innerHTML = '';
 
-    if (!items || items.length === 0) {
-        itemsContainer.innerHTML = '<p class="text-muted">Noch keine Produkte ausgewählt.</p>';
+    // Filter anwenden
+    let filteredItems = items;
+    if (filterOpenOnly) {
+        filteredItems = items.filter(item => !item.is_checked);
+    }
+
+    if (!filteredItems || filteredItems.length === 0) {
+        itemsContainer.innerHTML = filterOpenOnly
+            ? '<p class="text-muted">Alle Waren sind abgehakt!</p>'
+            : '<p class="text-muted">Noch keine Produkte ausgewählt.</p>';
         return;
     }
 
     // Sortieren: nach sort_order (Erstellungsreihenfolge), bei Gleichheit nach Name
-    items.sort((a, b) => {
+    filteredItems.sort((a, b) => {
         const orderA = a.sort_order ?? 0;
         const orderB = b.sort_order ?? 0;
         if (orderA !== orderB) return orderA - orderB;
@@ -780,7 +789,7 @@ function renderItems(items) {
 
     // 1. Items für jede Area rendern (in definierter Reihenfolge)
     areas.forEach(area => {
-        const areaItems = items.filter(item => item.area_id === area.id);
+        const areaItems = filteredItems.filter(item => item.area_id === area.id);
         if (areaItems.length > 0) {
             const areaHeader = document.createElement('div');
             areaHeader.className = 'area-group-header';
@@ -802,7 +811,7 @@ function renderItems(items) {
     });
 
     // 2. "Sonstiges" items ohne area_id am Ende
-    const unknownItems = items.filter(item => !item.area_id);
+    const unknownItems = filteredItems.filter(item => !item.area_id);
     if (unknownItems.length > 0) {
         const areaHeader = document.createElement('div');
         areaHeader.className = 'area-group-header';
@@ -820,6 +829,30 @@ function renderItems(items) {
             `;
             itemsContainer.appendChild(itemDiv);
         });
+    }
+}
+
+/**
+ * Aktualisiert den Badge mit der Anzahl offener Waren.
+ */
+function updateOpenCountBadge(allItems) {
+    const badge = document.getElementById('open-count-badge');
+    if (!badge) return;
+    const openCount = allItems ? allItems.filter(item => !item.is_checked).length : 0;
+    badge.textContent = openCount > 0 ? `(${openCount} offen)` : '';
+}
+
+/**
+ * Wird aufgerufen, wenn der Filter umgeschaltet wird.
+ */
+function onFilterChange() {
+    const checkbox = document.getElementById('filter-open-only');
+    if (checkbox) {
+        filterOpenOnly = checkbox.checked;
+    }
+    // Neu rendern
+    if (currentTripId) {
+        loadCurrentTrip();
     }
 }
 
@@ -913,6 +946,7 @@ async function loadCurrentTrip() {
         // Pending operations anwenden (lokale Änderungen, die noch nicht gesynct sind)
         cachedItems = applyPendingOpsToItems(cachedItems);
         renderItems(cachedItems);
+        updateOpenCountBadge(cachedItems);
 
         // --- Hintergrund: Mit Server synchronisieren ---
         syncCurrentTripInBg(completeBtn, container);
@@ -929,10 +963,11 @@ async function loadCurrentTrip() {
                 return;
             }
 
-            currentTripId = activeTrip.id;
+           currentTripId = activeTrip.id;
             completeBtn.classList.remove('d-none');
             const apiItems = await apiRequest(`/items/trip/${activeTrip.id}`);
             renderItems(apiItems);
+            updateOpenCountBadge(apiItems);
 
             // Cache aktualisieren (wird von cache-layer.js gemacht, wenn apiRequest erfolgreich war)
         } catch (err) {
@@ -970,6 +1005,7 @@ async function syncCurrentTripInBg(completeBtn, container) {
         // apiRequest-Patch in cache-layer.js automatisch durchgeführt.
         const apiItems = await apiRequest(`/items/trip/${activeTrip.id}`);
         renderItems(apiItems);
+        updateOpenCountBadge(apiItems);
     } catch (err) {
         // Still silently failed – UI zeigt bereits Cache-Daten
         if (window.debugLog) {
@@ -1262,5 +1298,7 @@ window.deleteItem = deleteItem;
 window.viewTripDetail = viewTripDetail;
 window.hideHistoryDetail = hideHistoryDetail;
 window.openAccountModal = openAccountModal;
+window.updateOpenCountBadge = updateOpenCountBadge;
+window.onFilterChange = onFilterChange;
 
 export { initApp, initModals };

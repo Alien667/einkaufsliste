@@ -188,6 +188,14 @@
                 <h2 class="h4">Aktueller Einkauf</h2>
                 <button class="btn btn-danger" id="complete-trip-btn" onclick="completeTrip()">Einkauf abschließen</button>
             </div>
+            <div class="mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="filter-open-only" checked onchange="onFilterChange()">
+                    <label class="form-check-label" for="filter-open-only">
+                        Nur offene Waren anzeigen <span id="open-count-badge" class="badge bg-secondary"></span>
+                    </label>
+                </div>
+            </div>
             <div id="active-trip-content">
                 <!-- Active trip items will be loaded here -->
                 <div class="d-flex justify-content-between align-items-center mb-3">

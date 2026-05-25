@@ -590,9 +590,20 @@ function applyPatches() {
                 console.error('Optimistic toggleItemCheck save failed:', dbErr);
             }
 
-            // Dann Originalaufruf ausfuehren (UI-Update + API-Sync)
+           // Dann Originalaufruf ausfuehren (UI-Update + API-Sync)
             try {
-                return await origToggleItemCheck(itemId, isChecked);
+                const result = await origToggleItemCheck(itemId, isChecked);
+                // Badge aktualisieren nach erfolgreichem Check/Uncheck
+                try {
+                    if (!db._db) await db.open();
+                    const items = await db.getItemsByTrip(currentTripId);
+                    if (window.updateOpenCountBadge) {
+                        window.updateOpenCountBadge(items);
+                    }
+                } catch (badgeErr) {
+                    console.warn('Badge update failed:', badgeErr);
+                }
+                return result;
             } catch (err) {
                 // Wenn Original auch fehlaeuft und offline: UI manuell updaten als Fallback
                 if (!isOnline) {
