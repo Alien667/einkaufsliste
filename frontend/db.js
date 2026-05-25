@@ -4,7 +4,7 @@
  */
 
 const DB_NAME = 'EinkaufslisteDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORES = {
     AUTH: 'auth',
@@ -12,6 +12,7 @@ const STORES = {
     PRODUCTS: 'products',
     TRIPS: 'trips',
     ITEMS: 'items',
+    SYNC: 'sync',
 };
 
 /**
@@ -61,6 +62,12 @@ function openDB() {
                 itemsStore.createIndex('account_id', 'account_id', { unique: false });
                 itemsStore.createIndex('trip_id', 'trip_id', { unique: false });
                 itemsStore.createIndex('updated_at', 'updated_at', { unique: false });
+            }
+
+            // Sync store: persistente Einstellungen (z.B. lastSyncTimestamp)
+            // keyPath = 'key', einfacher Key-Value-Speicher
+            if (!db.objectStoreNames.contains(STORES.SYNC)) {
+                db.createObjectStore(STORES.SYNC, { keyPath: 'key' });
             }
         };
     });
@@ -293,7 +300,7 @@ const db = {
         return this.delete(STORES.ITEMS, id);
     },
 
-    // --- Bulk operations ---
+     // --- Bulk operations ---
     async bulkPut(storeName, items) {
         return new Promise((resolve, reject) => {
             const tx = this._db.transaction(storeName, 'readwrite');
@@ -302,6 +309,16 @@ const db = {
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
         });
+    },
+
+    // --- Sync settings helpers (SYNC store) ---
+    async saveSyncSetting(key, value) {
+        return this.put(STORES.SYNC, { key, value, updated_at: new Date().toISOString() });
+    },
+
+    async getSyncSetting(key) {
+        const entry = await this.get(STORES.SYNC, key);
+        return entry?.value;
     },
 
     async clearAll() {

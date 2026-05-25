@@ -755,6 +755,27 @@ async def sync_operations(
                     models.Area.account_id == account_id
                 ).first()
                 if existing:
+                    # Conflict check
+                    client_updated_at_str = data.get("_client_updated_at")
+                    if client_updated_at_str and existing.updated_at:
+                        try:
+                            client_updated_at = dateutil.parser.isoparse(client_updated_at_str).replace(tzinfo=None)
+                            if existing.updated_at > client_updated_at:
+                                results.append({
+                                    "op_id": op_id,
+                                    "status": "conflict",
+                                    "reason": "stale_update",
+                                    "server_data": {
+                                        "id": existing.id,
+                                        "name": existing.name,
+                                        "account_id": existing.account_id,
+                                        "updated_at": existing.updated_at.isoformat()
+                                    }
+                                })
+                                continue
+                        except Exception:
+                            pass
+
                     if "name" in data:
                         existing.name = data["name"]
                     existing.updated_at = now
@@ -802,6 +823,28 @@ async def sync_operations(
                     models.Product.account_id == account_id
                 ).first()
                 if existing:
+                    # Conflict check
+                    client_updated_at_str = data.get("_client_updated_at")
+                    if client_updated_at_str and existing.updated_at:
+                        try:
+                            client_updated_at = dateutil.parser.isoparse(client_updated_at_str).replace(tzinfo=None)
+                            if existing.updated_at > client_updated_at:
+                                results.append({
+                                    "op_id": op_id,
+                                    "status": "conflict",
+                                    "reason": "stale_update",
+                                    "server_data": {
+                                        "id": existing.id,
+                                        "name": existing.name,
+                                        "area_id": existing.area_id,
+                                        "account_id": existing.account_id,
+                                        "updated_at": existing.updated_at.isoformat()
+                                    }
+                                })
+                                continue
+                        except Exception:
+                            pass
+
                     if "name" in data:
                         existing.name = data["name"]
                     if "area_id" in data:

@@ -5,7 +5,7 @@ let products = [];
 let trips = [];
 let authToken = localStorage.getItem('authToken');
 let isSuperuser = localStorage.getItem('isSuperuser') === 'true';
-let filterOpenOnly = true; // Standard: nur offene Waren anzeigen
+let filterOpenOnly = false; // Standard: alle Waren anzeigen
 
 // Bootstrap Modals
 let areaModal, productModal, spontaneousModal, accountModal;
@@ -987,6 +987,13 @@ async function loadCurrentTrip() {
 async function syncCurrentTripInBg(completeBtn, container) {
     const previousTripId = currentTripId;
     try {
+        // Zuerst pending ops auf Server pushen, damit der Server den
+        // neuesten Zustand liefert und wir nicht lokale Änderungen
+        // durch veraltete Server-Daten überschreiben.
+        if (window.sync?.flushQueue) {
+            await window.sync.flushQueue();
+        }
+
         // Aktuellen Trip von API holen
         const apiTrips = await apiRequest('/trips');
         const activeTrip = apiTrips?.find(t => !t.is_archived);
@@ -1002,8 +1009,7 @@ async function syncCurrentTripInBg(completeBtn, container) {
         currentTripId = activeTrip.id;
         completeBtn.classList.remove('d-none');
 
-        // Items von API holen — mergePendingOps wird bereits durch den
-        // apiRequest-Patch in cache-layer.js automatisch durchgeführt.
+        // Items von API holen — jetzt hat der Server den neuesten Stand.
         const apiItems = await apiRequest(`/items/trip/${activeTrip.id}`);
         renderItems(apiItems);
         updateOpenCountBadge(apiItems);

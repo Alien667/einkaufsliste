@@ -30,6 +30,11 @@
                         <span id="sync-badge" class="badge bg-secondary">Lädt...</span>
                     </li>
                     <li class="nav-item me-2">
+                        <button class="btn btn-sm btn-outline-light" id="debug-toggle-btn" onclick="debugLog.toggleVisibility()" title="Debug-Log ein-/ausblenden">
+                            <i class="bi bi-eye" id="debug-toggle-icon"></i> Debug
+                        </button>
+                    </li>
+                    <li class="nav-item me-2">
                         <button class="btn btn-sm btn-outline-light" onclick="window.sync?.fullSync()" title="Jetzt synchronisieren">
                             <i class="bi bi-arrow-clockwise"></i> Sync
                         </button>
@@ -190,7 +195,7 @@
             </div>
             <div class="mb-3">
                 <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="filter-open-only" checked onchange="onFilterChange()">
+                    <input class="form-check-input" type="checkbox" id="filter-open-only" onchange="onFilterChange()">
                     <label class="form-check-label" for="filter-open-only">
                         Nur offene Waren anzeigen <span id="open-count-badge" class="badge bg-secondary"></span>
                     </label>
@@ -384,7 +389,7 @@
     </div>
 
     <!-- Debug Log Panel -->
-    <div id="debug-log-panel" class="collapsed">
+    <div id="debug-log-panel" class="collapsed hidden">
         <div id="debug-log-header" onclick="debugLog.toggle()">
             <h6>🔍 Debug-Log</h6>
             <div id="debug-log-controls">

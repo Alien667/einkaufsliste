@@ -96,30 +96,31 @@ async function cacheApiResponse(url, data) {
         // Speichere account_id persistent im localStorage für alle localStorage-Fallbacks
         localStorage.setItem('_auth_account_id', String(auth.account_id));
 
-        const now = new Date().toISOString();
+        // Server.updated_at priorisieren — der Server ist die autoritative Quelle.
+        // Client-Zeit nur als Fallback, wenn der Server keinen Wert mitteilt.
 
         if (url.includes('/areas') && !url.includes('with-products') && Array.isArray(data)) {
             for (const area of data) {
-                await db.saveArea({ ...area, account_id: auth.account_id, updated_at: now });
+                await db.saveArea({ ...area, account_id: auth.account_id, updated_at: area.updated_at || now });
             }
             if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: ' + data.length + ' Bereiche von ' + url.substring(0, 60));
         }
 
         if (url.includes('/products') && Array.isArray(data)) {
             for (const product of data) {
-                await db.saveProduct({ ...product, account_id: auth.account_id, updated_at: now });
+                await db.saveProduct({ ...product, account_id: auth.account_id, updated_at: product.updated_at || now });
             }
             if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: ' + data.length + ' Produkte von ' + url.substring(0, 60));
         }
 
         if (url.includes('/trips') && !url.includes('/archive') && Array.isArray(data)) {
             for (const trip of data) {
-                await db.saveTrip({ ...trip, account_id: auth.account_id, updated_at: now });
+                await db.saveTrip({ ...trip, account_id: auth.account_id, updated_at: trip.updated_at || now });
             }
             if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: ' + data.length + ' Trips von ' + url.substring(0, 60));
         }
 
-        if (url.includes('/items/trip/') && Array.isArray(data)) {
+         if (url.includes('/items/trip/') && Array.isArray(data)) {
             const tripId = url.match(/\/items\/trip\/(\d+)/)?.[1];
             if (tripId) {
                 for (const item of data) {
@@ -127,7 +128,7 @@ async function cacheApiResponse(url, data) {
                         ...item,
                         trip_id: parseInt(tripId),
                         account_id: auth.account_id,
-                        updated_at: now,
+                        updated_at: item.updated_at || now,
                     });
                 }
                 if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: ' + data.length + ' Items für Trip ' + tripId);
@@ -135,22 +136,22 @@ async function cacheApiResponse(url, data) {
         }
 
         if (url.includes('/trips/') && !url.includes('/archive') && !url.includes('/archived') && typeof data === 'object' && data.id) {
-            await db.saveTrip({ ...data, account_id: auth.account_id, updated_at: now });
+            await db.saveTrip({ ...data, account_id: auth.account_id, updated_at: data.updated_at || now });
             if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: Einzeltrip ' + data.id);
         }
 
         if (url.match(/\/areas\/\d+$/) && typeof data === 'object' && data.id) {
-            await db.saveArea({ ...data, account_id: auth.account_id, updated_at: now });
+            await db.saveArea({ ...data, account_id: auth.account_id, updated_at: data.updated_at || now });
             if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: Einzelbereich ' + data.id);
         }
 
         if (url.match(/\/products\/\d+$/) && typeof data === 'object' && data.id) {
-            await db.saveProduct({ ...data, account_id: auth.account_id, updated_at: now });
+            await db.saveProduct({ ...data, account_id: auth.account_id, updated_at: data.updated_at || now });
             if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: Einzelprodukt ' + data.id);
         }
 
         if (url.match(/\/items\/\d+$/) && typeof data === 'object' && data.id) {
-            await db.saveItem({ ...data, account_id: auth.account_id, updated_at: now });
+            await db.saveItem({ ...data, account_id: auth.account_id, updated_at: data.updated_at || now });
             if (window.debugLog) window.debugLog.info('CACHE', '💾 Gecacht: Einzelitem ' + data.id);
         }
 

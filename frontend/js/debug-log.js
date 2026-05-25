@@ -10,6 +10,7 @@
     const MAX_ENTRIES = 500;
     let _isOnline = navigator.onLine;
     let _entryCount = 0;
+    let _hidden = true; // Standard: Debug-Panel ausgeblendet
 
     // ─── DOM refs (lazy) ───
     function getPanel() { return document.getElementById('debug-log-panel'); }
@@ -135,7 +136,47 @@
 
         /** Collapse panel */
         collapse() { getPanel() && getPanel().classList.add('collapsed'); },
+
+        /** Sichtbarkeit umschalten (hidden ↔ sichtbar) */
+        toggleVisibility() {
+            const panel = getPanel();
+            if (!panel) return;
+            _hidden = !_hidden;
+            if (_hidden) {
+                panel.classList.add('hidden');
+                panel.classList.remove('collapsed');
+            } else {
+                panel.classList.remove('hidden');
+                panel.classList.add('collapsed');
+            }
+            _updateToggleIcon();
+        },
+
+        /** Panel komplett verstecken */
+        setHidden(hide) {
+            const panel = getPanel();
+            if (!panel) return;
+            _hidden = !!hide;
+            if (_hidden) {
+                panel.classList.add('hidden');
+                panel.classList.remove('collapsed');
+            } else {
+                panel.classList.remove('hidden');
+                panel.classList.add('collapsed');
+            }
+            _updateToggleIcon();
+        },
+
+        /** Ist das Panel gerade versteckt? */
+        get hidden() { return _hidden; },
     };
+
+    // ─── Toggle-Icon aktualisieren ───
+    function _updateToggleIcon() {
+        const icon = document.getElementById('debug-toggle-icon');
+        if (!icon) return;
+        icon.className = _hidden ? 'bi bi-eye' : 'bi bi-eye-off';
+    }
 
     // Expose globally
     window.debugLog = debugLog;
@@ -244,5 +285,6 @@
     // Log initial state
     debugLog.setOnline(_isOnline);
     debugLog.info('APP', '🚀 Debug-Log initialisiert (Online: ' + _isOnline + ')');
+    _updateToggleIcon(); // Icon-Status auf Initialzustell anpassen
 
 })();

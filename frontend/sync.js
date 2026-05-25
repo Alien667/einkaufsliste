@@ -108,8 +108,9 @@ async function flushQueue() {
     try {
         const operations = batch.map(op => ({
             op_id: op.op_id,
-            entity: op.entity,
-            operation: op.operation,
+            op_type: op.operation,
+            // Entity-Namen auf Singular normieren (Backend erwartet "item", "area", etc.)
+            entity: op.entity.replace(/s$/, ''),
             entity_id: op.entity_id,
             data: op.data,
         }));
@@ -301,6 +302,69 @@ async function handleLocalChange(entity, operation, entityId, changeData) {
     }
 }
 
+// --- Fetch fresh trip data after queue flush ---
+async function fetchFreshTrip() {
+    const auth = await db.getAuth();
+    if (!auth?.token) return;
+
+    try {
+        const tripsRes = await fetch(`${CONFIG.API_BASE}/trips`, {
+            headers: { 'Authorization': `Bearer ${auth.token}` },
+        });
+        if (!tripsRes.ok) return;
+        const trips = await tripsRes.json();
+        const activeTrip = trips.find(t => !t.is_archived);
+        if (!activeTrip) return;
+
+        const itemsRes = await fetch(`${CONFIG.API_BASE}/items/trip/${activeTrip.id}`, {
+            headers: { 'Authorization': `Bearer ${auth.token}` },
+        });
+        if (!itemsRes.ok) return;
+        const serverItems = await itemsRes.json();
+
+        // Update active trip
+        await db.saveTrip({ ...activeTrip, account_id: auth.account_id });
+
+        // Lokale Items laden (knnen neuere Änderungen enthalten)
+        const localItems = await db.getItemsByTrip(activeTrip.id);
+
+        // Server-Daten mit lokalen Änderungen merge:
+        // Nur Server-Version verwenden wenn sie JÜNGER ist als die lokale.
+        // So gehen lokale Changes nicht verloren wenn der Server den PATCH
+        // noch nicht verarbeitet hat (Race Condition nach Queue-Flush).
+        for (const serverItem of serverItems) {
+            const localItem = localItems.find(li => li.id === serverItem.id);
+            if (localItem) {
+                // Nur überschreiben wenn Server-Version jünger ist
+                const serverTime = new Date(serverItem.updated_at).getTime();
+                const localTime = new Date(localItem.updated_at).getTime();
+                if (serverTime > localTime) {
+                    await db.saveItem({
+                        ...serverItem,
+                        trip_id: activeTrip.id,
+                        account_id: auth.account_id,
+                    });
+                }
+                // Sonst: lokale Version behalten (Client ist neuer)
+            } else {
+                // Neues Item vom Server
+                await db.saveItem({
+                    ...serverItem,
+                    trip_id: activeTrip.id,
+                    account_id: auth.account_id,
+                });
+            }
+        }
+
+        if (window.debugLog) {
+            window.debugLog.success('SYNC', `✅ Trip ${activeTrip.id} gemergt: ${serverItems.length} Server-Items, ${localItems.length} lokale`);
+        }
+
+    } catch (error) {
+        console.error('fetchFreshTrip failed:', error);
+    }
+}
+
 // --- Polling Sync (fallback when SSE not available) ---
 async function pollForChanges() {
     if (!isConnected) return;
@@ -327,7 +391,9 @@ async function pollForChanges() {
         // Update local database with server changes
         await applyServerChanges(data);
 
-        lastSyncTimestamp = new Date().toISOString();
+        // Server-Zeit verwenden (nicht Client-Zeit) und persistieren
+        lastSyncTimestamp = data.timestamp;
+        await db.saveSyncSetting('lastSyncTimestamp', lastSyncTimestamp);
     } catch (error) {
         console.error('Polling failed:', error);
     }
@@ -375,10 +441,25 @@ async function fullSync() {
 
     try {
         // First, flush local queue
+        const hadPendingOps = operationQueue.length > 0;
         await flushQueue();
 
-        // Then, pull server changes
-        await pollForChanges();
+       // Nach dem Queue-Flush: pollForChanges() holt ALLE Items seit
+        // lastSyncTimestamp, was Dutzende unveränderter Items umfasst.
+        // bulkPut() überschreibt damit alle diese Items in IndexedDB –
+        // auch die gecheckten Items des Clients gehen verloren.
+        //
+        // Fix: Direkt den aktiven Trip + Items vom Server holen.
+        if (hadPendingOps) {
+            setTimeout(() => {
+                if (!isConnected) return;
+                fetchFreshTrip().catch(() => {});
+            }, 500);
+        }
+
+
+
+
 
         if (window.debugLog) window.debugLog.success('SYNC', '✅ FullSync abgeschlossen');
         emit('sync:complete', {});
@@ -394,6 +475,15 @@ async function initSync() {
     if (window.debugLog) window.debugLog.info('SYNC', '🚀 Synchronisation wird initialisiert...');
 
     await db.open();
+
+    // Gespeicherten lastSyncTimestamp wiederherstellen (überlebt Seiten-Reload)
+    const savedTimestamp = await db.getSyncSetting('lastSyncTimestamp');
+    if (savedTimestamp) {
+        lastSyncTimestamp = savedTimestamp;
+        if (window.debugLog) {
+            window.debugLog.info('SYNC', '📅 lastSyncTimestamp wiederhergestellt: ' + lastSyncTimestamp);
+        }
+    }
 
     // Listen for online/offline events (from cache-layer)
     window.addEventListener('online', () => {
