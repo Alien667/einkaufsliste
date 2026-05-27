@@ -221,3 +221,5 @@ __marimo__/
 backend/auth.db
 backend/shopping_list.db
 test_scripts/
+backend/auth.db.backup
+backend/shopping_list.db.backup
