@@ -1,5 +1,6 @@
 // State management
 let currentTripId = null;
+let activeTrip = null; // Active (non-archived) trip for selected_product_ids sync
 let areas = [];
 let products = [];
 let trips = [];
@@ -661,6 +662,10 @@ async function prepareTripCreation() {
         areas = fetchedAreas;
         products = fetchedProducts;
 
+        // Hole den aktiven Trip für selected_product_ids Sync
+        const tripsList = await apiRequest('/trips');
+        activeTrip = tripsList.find(t => !t.is_archived) || null;
+
         renderTripCreationForm();
     } catch (err) {
         showAlert('Fehler beim Vorbereiten des Einkaufs.');
@@ -672,8 +677,8 @@ function renderTripCreationForm() {
 
     productContainer.innerHTML = '<h5 class="mb-3">Waren auswählen</h5>';
 
-    // Hole die gespeicherten Produkt-IDs aus dem localStorage
-    const selectedProductIds = JSON.parse(localStorage.getItem('selected_trip_products') || '[]');
+    // Hole die gespeicherten Produkt-IDs aus dem aktiven Trip
+    const selectedProductIds = activeTrip?.selected_product_ids || [];
 
     areas.forEach(area => {
         const areaProducts = products.filter(p => p.area_id === area.id);
@@ -706,9 +711,8 @@ function renderTripCreationForm() {
 async function generateTrip() {
     try {
         // Prüfen, ob bereits ein aktiver Einkauf existiert
-        const trips = await apiRequest('/trips');
-        const activeTrip = trips.find(t => !t.is_archived);
-        if (activeTrip) {
+        const oldActiveTrip = activeTrip;
+        if (oldActiveTrip) {
             if (!confirm('Es ist noch ein aktueller Einkauf offen. Möchten Sie trotzdem eine neue Liste erstellen?')) {
                 return;
             }
@@ -733,8 +737,18 @@ async function generateTrip() {
             });
         }
 
-        // Auswahl nach erfolgreichem Abschluss leeren
-        localStorage.removeItem('selected_trip_products');
+        // Auswahl aus dem alten Trip löschen
+        if (oldActiveTrip) {
+            try {
+                await apiRequest(`/trips/${oldActiveTrip.id}/selected_products`, 'PUT', {
+                    selected_product_ids: []
+                });
+            } catch (err) {
+                console.error('Fehler beim Löschen der Produkt-Auswahl:', err);
+            }
+        }
+
+        activeTrip = null;
 
         showAlert('Einkaufsliste wurde erstellt!');
         showPage('current-trip');
@@ -743,8 +757,11 @@ async function generateTrip() {
     }
 }
 
-function updateSelectedProducts(productId, isChecked) {
-    let selectedProductIds = JSON.parse(localStorage.getItem('selected_trip_products') || '[]');
+async function updateSelectedProducts(productId, isChecked) {
+    if (!activeTrip) return;
+
+    // Lokale Kopie der IDs
+    let selectedProductIds = [...(activeTrip.selected_product_ids || [])];
     if (isChecked) {
         if (!selectedProductIds.includes(productId)) {
             selectedProductIds.push(productId);
@@ -752,7 +769,17 @@ function updateSelectedProducts(productId, isChecked) {
     } else {
         selectedProductIds = selectedProductIds.filter(id => id !== productId);
     }
-    localStorage.setItem('selected_trip_products', JSON.stringify(selectedProductIds));
+
+    // Aktualisiere den aktiven Trip über das API
+    try {
+        await apiRequest(`/trips/${activeTrip.id}/selected_products`, 'PUT', {
+            selected_product_ids: selectedProductIds
+        });
+        // Lokalen Zustand aktualisieren
+        activeTrip.selected_product_ids = selectedProductIds;
+    } catch (err) {
+        console.error('Fehler beim Aktualisieren der Produkt-Auswahl:', err);
+    }
 }
 
 // --- Page 4: Current Trip ---

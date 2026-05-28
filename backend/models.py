@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, DateTime, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
@@ -32,6 +32,8 @@ class ShoppingTrip(Base):
     account_id = Column(Integer, index=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_archived = Column(Boolean, default=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    selected_product_ids = Column(JSON, nullable=True)
 
     items = relationship("ShoppingListItem", back_populates="trip", cascade="all, delete-orphan")
 

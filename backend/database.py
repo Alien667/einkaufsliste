@@ -20,13 +20,14 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     _migrate_updated_at()
     _migrate_sort_order()
+    _migrate_selected_product_ids()
 
 
 def _migrate_updated_at():
-    """Add `updated_at` columns to areas, products, shopping_list_items if missing."""
+    """Add `updated_at` columns to areas, products, shopping_list_items, shopping_trips if missing."""
     session = SessionLocal()
     try:
-        tables = ["areas", "products", "shopping_list_items"]
+        tables = ["areas", "products", "shopping_list_items", "shopping_trips"]
         for table in tables:
             # Check if column already exists
             row = session.execute(
@@ -63,6 +64,24 @@ def _migrate_sort_order():
         if "sort_order" not in col_names:
             session.execute(
                 text("ALTER TABLE {} ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0".format(table))
+            )
+            session.commit()
+    finally:
+        session.close()
+
+
+def _migrate_selected_product_ids():
+    """Add `selected_product_ids` column to shopping_trips if missing."""
+    session = SessionLocal()
+    try:
+        table = "shopping_trips"
+        col_names = [r[1] for r in session.execute(
+            text("PRAGMA table_info({})".format(table))
+        ).fetchall()]
+
+        if "selected_product_ids" not in col_names:
+            session.execute(
+                text("ALTER TABLE {} ADD COLUMN selected_product_ids TEXT".format(table))
             )
             session.commit()
     finally:

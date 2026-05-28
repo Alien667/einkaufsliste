@@ -541,7 +541,10 @@ function applyPatches() {
                         await db.saveItem(newItem);
                     }
 
-                    localStorage.removeItem('selected_trip_products');
+                    // selected_product_ids auf dem Trip auf leeres Array setzen
+                    newTrip.selected_product_ids = [];
+                    await db.saveTrip(newTrip);
+
                     showPage('current-trip');
                     if (window.sync) {
                         window.sync.fullSync();

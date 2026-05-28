@@ -90,6 +90,14 @@ def archive_trip(db: Session, trip_id: int, account_id: int):
         db.commit()
     return db_trip
 
+def update_selected_product_ids(db: Session, trip_id: int, account_id: int, selected_product_ids: list):
+    db_trip = db.query(models.ShoppingTrip).filter(models.ShoppingTrip.id == trip_id, models.ShoppingTrip.account_id == account_id).first()
+    if db_trip:
+        db_trip.selected_product_ids = selected_product_ids
+        db.commit()
+        db.refresh(db_trip)
+    return db_trip
+
 # --- ShoppingListItem CRUD ---
 
 def create_list_item(db: Session, item: schemas.ShoppingListItemCreate, account_id: int):

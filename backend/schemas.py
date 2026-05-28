@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Any
 from datetime import datetime
 
 # --- Area Schemas ---
@@ -51,12 +51,16 @@ class ShoppingTripBase(BaseModel):
 class ShoppingTripCreate(ShoppingTripBase):
     pass
 
+class TripSelectedProducts(BaseModel):
+    selected_product_ids: List[int]
+
 class ShoppingTrip(ShoppingTripBase):
     id: int
     created_at: datetime
     is_archived: bool
     account_id: int
     updated_at: Optional[datetime] = None
+    selected_product_ids: Optional[List[int]] = None
 
     class Config:
         from_attributes = True

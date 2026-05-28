@@ -386,6 +386,7 @@ def create_trip(
         "created_at": db_trip.created_at.isoformat() if db_trip.created_at else None,
         "is_archived": db_trip.is_archived,
         "account_id": db_trip.account_id,
+        "selected_product_ids": db_trip.selected_product_ids,
     })
     return db_trip
 
@@ -417,6 +418,25 @@ def archive_trip(
     crud.archive_trip(db, trip_id, current_user.account_id)
     _broadcast_change(current_user.account_id, "trips", trip_id, "patch", {"is_archived": True})
     return {"message": "Trip archived"}
+
+@app.put("/trips/{trip_id}/selected_products", response_model=schemas.ShoppingTrip)
+def put_selected_products(
+    trip_id: int,
+    product_ids: schemas.TripSelectedProducts,
+    current_user: auth_models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from datetime import datetime as dt
+    db_trip = crud.update_selected_product_ids(
+        db, trip_id, current_user.account_id, product_ids.selected_product_ids
+    )
+    db_trip.updated_at = dt.utcnow()
+    _broadcast_change(current_user.account_id, "trips", trip_id, "patch", {
+        "id": db_trip.id, "account_id": db_trip.account_id,
+        "updated_at": db_trip.updated_at.isoformat(),
+        "selected_product_ids": db_trip.selected_product_ids,
+    })
+    return db_trip
 
 # --- Shopping List Item Endpoints ---
 
@@ -604,10 +624,11 @@ async def get_sync_changes(
     areas = filter_updated(models.Area, since_dt)
     products = filter_updated(models.Product, since_dt)
     items = filter_updated(models.ShoppingListItem, since_dt)
+    trips = filter_updated(models.ShoppingTrip, since_dt)
 
     # Find max updated_at for the response timestamp
     max_dt = None
-    for lst in [areas, products, items]:
+    for lst in [areas, products, items, trips]:
         for obj in lst:
             if obj.updated_at and (max_dt is None or obj.updated_at > max_dt):
                 max_dt = obj.updated_at
@@ -621,6 +642,7 @@ async def get_sync_changes(
         "areas": [_to_dict(a, ["id", "account_id", "name", "position", "updated_at"]) for a in areas],
         "products": [_to_dict(p, ["id", "account_id", "name", "area_id", "updated_at"]) for p in products],
         "items": [_to_dict(i, ["id", "account_id", "trip_id", "name", "is_checked", "product_id", "area_id", "updated_at"]) for i in items],
+        "trips": [_to_dict(t, ["id", "account_id", "is_archived", "updated_at", "selected_product_ids"]) for t in trips],
     }
 
 
@@ -894,8 +916,32 @@ async def sync_operations(
                     models.ShoppingTrip.account_id == account_id
                 ).first()
                 if existing:
+                    # Conflict check
+                    client_updated_at_str = data.get("_client_updated_at")
+                    if client_updated_at_str and existing.updated_at:
+                        try:
+                            client_updated_at = dateutil.parser.isoparse(client_updated_at_str).replace(tzinfo=None)
+                            if existing.updated_at > client_updated_at:
+                                results.append({
+                                    "op_id": op_id,
+                                    "status": "conflict",
+                                    "reason": "stale_update",
+                                    "server_data": {
+                                        "id": existing.id,
+                                        "account_id": existing.account_id,
+                                        "is_archived": existing.is_archived,
+                                        "selected_product_ids": existing.selected_product_ids,
+                                        "updated_at": existing.updated_at.isoformat()
+                                    }
+                                })
+                                continue
+                        except Exception:
+                            pass
+
                     if "is_archived" in data:
                         existing.is_archived = data["is_archived"]
+                    if "selected_product_ids" in data:
+                        existing.selected_product_ids = data["selected_product_ids"]
                     existing.updated_at = now
                     db.commit()
                     db.refresh(existing)
@@ -903,6 +949,7 @@ async def sync_operations(
                         "id": existing.id, "account_id": existing.account_id,
                         "updated_at": existing.updated_at.isoformat(),
                         "is_archived": existing.is_archived,
+                        "selected_product_ids": existing.selected_product_ids,
                     })
                     results.append({
                         "op_id": op_id,
