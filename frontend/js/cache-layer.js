@@ -731,7 +731,13 @@ function applyPatches() {
 
                 // UI vorbereiten
                 document.getElementById('spontNameInput').value = '';
-                spontaneousModal.hide();
+                const spontModalEl = document.getElementById('spontaneousModal');
+                if (spontModalEl) {
+                    const spontModal = bootstrap.Modal.getInstance(spontModalEl);
+                    if (spontModal) {
+                        spontModal.hide();
+                    }
+                }
             } catch (dbErr) {
                 console.error('Optimistic saveSpontaneousProduct failed:', dbErr);
                 showAlert('Fehler beim Erstellen im Cache: ' + dbErr.message);
