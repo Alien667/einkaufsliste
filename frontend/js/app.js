@@ -7,6 +7,7 @@ let trips = [];
 let authToken = localStorage.getItem('authToken');
 let isSuperuser = localStorage.getItem('isSuperuser') === 'true';
 let filterOpenOnly = false; // Standard: alle Waren anzeigen
+let selectedProductIdsState = []; // Local selection state for "Neuer Einkauf" page
 
 // Bootstrap Modals
 let areaModal, productModal, spontaneousModal, accountModal;
@@ -654,6 +655,7 @@ async function deleteProduct(id) {
 // --- Page 3: Create Trip ---
 
 async function prepareTripCreation() {
+    if (window.debugLog) window.debugLog.info('SELECT', 'prepareTripCreation: starting...');
     try {
         const [fetchedAreas, fetchedProducts] = await Promise.all([
             apiRequest('/areas'),
@@ -663,12 +665,27 @@ async function prepareTripCreation() {
         products = fetchedProducts;
 
         // Hole den aktiven Trip für selected_product_ids Sync
+        if (window.debugLog) window.debugLog.info('SELECT', 'prepareTripCreation: fetching trips...');
         const tripsList = await apiRequest('/trips');
+        if (window.debugLog) window.debugLog.info('SELECT', `prepareTripCreation: tripsList=${JSON.stringify(tripsList)}`);
+        
         activeTrip = tripsList.find(t => !t.is_archived) || null;
+        if (window.debugLog) window.debugLog.info('SELECT', `prepareTripCreation: activeTrip=${activeTrip ? JSON.stringify(activeTrip) : 'null'}`);
 
+        // Lokalen Auswahl-Zustand aus activeTrip aktualisieren, falls vorhanden und ein gültiges Array
+        if (activeTrip && Array.isArray(activeTrip.selected_product_ids)) {
+            selectedProductIdsState = [...activeTrip.selected_product_ids];
+            if (window.debugLog) window.debugLog.info('SELECT', `prepareTripCreation: updated selectedProductIdsState from activeTrip.selected_product_ids: ${JSON.stringify(selectedProductIdsState)}`);
+        } else {
+            if (window.debugLog) window.debugLog.warn('SELECT', `prepareTripCreation: activeTrip.selected_product_ids is not a valid array: ${activeTrip?.selected_product_ids}`);
+            // Wenn activeTrip.selected_product_ids nicht ein Array ist, behalten wir den aktuellen selectedProductIdsState bei
+        }
+
+        if (window.debugLog) window.debugLog.info('SELECT', `prepareTripCreation: final selectedProductIdsState for render: ${JSON.stringify(selectedProductIdsState)}`);
         renderTripCreationForm();
     } catch (err) {
         showAlert('Fehler beim Vorbereiten des Einkaufs.');
+        if (window.debugLog) window.debugLog.error('SELECT', `prepareTripCreation error: ${err.message}`);
     }
 }
 
@@ -677,8 +694,10 @@ function renderTripCreationForm() {
 
     productContainer.innerHTML = '<h5 class="mb-3">Waren auswählen</h5>';
 
-    // Hole die gespeicherten Produkt-IDs aus dem aktiven Trip
-    const selectedProductIds = activeTrip?.selected_product_ids || [];
+    // Verwende den lokalen Auswahl-Zustand
+    const selectedProductIds = selectedProductIdsState || [];
+    
+    if (window.debugLog) window.debugLog.info('SELECT', `renderTripCreationForm: rendering with selectedProductIds=${JSON.stringify(selectedProductIds)}`);
 
     areas.forEach(area => {
         const areaProducts = products.filter(p => p.area_id === area.id);
@@ -758,10 +777,8 @@ async function generateTrip() {
 }
 
 async function updateSelectedProducts(productId, isChecked) {
-    if (!activeTrip) return;
-
-    // Lokale Kopie der IDs
-    let selectedProductIds = [...(activeTrip.selected_product_ids || [])];
+    // Lokale Kopie der IDs aus dem State
+    let selectedProductIds = [...selectedProductIdsState];
     if (isChecked) {
         if (!selectedProductIds.includes(productId)) {
             selectedProductIds.push(productId);
@@ -770,15 +787,30 @@ async function updateSelectedProducts(productId, isChecked) {
         selectedProductIds = selectedProductIds.filter(id => id !== productId);
     }
 
+    // Aktualisiere den lokalen State
+    selectedProductIdsState = selectedProductIds;
+    
+    if (window.debugLog) window.debugLog.info('SELECT', `updateSelectedProducts: productId=${productId}, isChecked=${isChecked}, new selectedProductIdsState=${JSON.stringify(selectedProductIdsState)}`);
+
+    if (!activeTrip) {
+        if (window.debugLog) window.debugLog.warn('SELECT', 'updateSelectedProducts: activeTrip is null, lokale Auswahl wurde gespeichert, aber kein API-Call durchgeführt.');
+        return;
+    }
+
     // Aktualisiere den aktiven Trip über das API
     try {
+        if (window.debugLog) window.debugLog.info('SELECT', `updateSelectedProducts: API PUT /trips/${activeTrip.id}/selected_products with data=${JSON.stringify({selected_product_ids: selectedProductIds})}`);
         await apiRequest(`/trips/${activeTrip.id}/selected_products`, 'PUT', {
             selected_product_ids: selectedProductIds
         });
+        if (window.debugLog) window.debugLog.info('SELECT', `updateSelectedProducts: API PUT successful`);
         // Lokalen Zustand aktualisieren
-        activeTrip.selected_product_ids = selectedProductIds;
+        if (activeTrip) {
+            activeTrip.selected_product_ids = selectedProductIds;
+        }
     } catch (err) {
         console.error('Fehler beim Aktualisieren der Produkt-Auswahl:', err);
+        if (window.debugLog) window.debugLog.error('SELECT', `updateSelectedProducts: API PUT failed: ${err.message}`);
     }
 }
 

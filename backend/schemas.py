@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import List, Optional, Any
 from datetime import datetime
 
@@ -64,6 +64,13 @@ class ShoppingTrip(ShoppingTripBase):
 
     class Config:
         from_attributes = True
+
+    @field_validator('selected_product_ids')
+    @classmethod
+    def convert_none_to_list(cls, v):
+        if v is None:
+            return []
+        return v
 
 # --- ShoppingListItem Schemas ---
 
