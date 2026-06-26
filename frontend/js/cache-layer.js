@@ -773,20 +773,24 @@ function applyPatches() {
                     return;
                 }
 
-                if (!currentTripId) {
+                // Verwende window.currentTripId, da currentTripId im Modul nicht definiert ist
+                let ctId = window.currentTripId !== undefined ? window.currentTripId : null;
+                if (!ctId) {
                     const trips = await db.getAllTrips();
                     const activeTrip = trips.find(t => !t.is_archived);
-                    if (activeTrip) currentTripId = activeTrip.id;
-                    else {
+                    if (activeTrip) {
+                        ctId = activeTrip.id;
+                        window.currentTripId = ctId;
+                    } else {
                         showAlert('Kein aktiver Einkauf im Cache.');
                         return;
                     }
                 }
 
-                const existing = await db.get(db.STORES.TRIPS, currentTripId);
+                const existing = await db.get(db.STORES.TRIPS, ctId);
                 if (existing) {
                     await db.saveTrip({ ...existing, is_archived: true, updated_at: new Date().toISOString() });
-                    currentTripId = null;
+                    window.currentTripId = null;
                     if (window.sync) {
                         window.sync.queueOperation('trips', 'patch', { is_archived: true }, existing.id);
                     }

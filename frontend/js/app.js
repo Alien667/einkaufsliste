@@ -739,6 +739,7 @@ async function generateTrip() {
 
         const newTrip = await apiRequest('/trips', 'POST');
         currentTripId = newTrip.id;
+        window.currentTripId = currentTripId;
 
         const selectedElements = document.querySelectorAll('.product-selector:checked');
         let sortOrder = 0;
@@ -997,6 +998,7 @@ async function loadCurrentTrip() {
     if (cachedTrip) {
         // Soforthin rendern – kein Warten auf API
         currentTripId = cachedTrip.id;
+        window.currentTripId = currentTripId;
         completeBtn.classList.remove('d-none');
         ensureContainerStructure(false);
 
@@ -1022,6 +1024,7 @@ async function loadCurrentTrip() {
             }
 
             currentTripId = activeTrip.id;
+            window.currentTripId = currentTripId;
             completeBtn.classList.remove('d-none');
             const apiItems = await apiRequest(`/items/trip/${activeTrip.id}`);
             renderItems(apiItems);
@@ -1066,6 +1069,7 @@ async function syncCurrentTripInBg(completeBtn, container) {
         }
 
         currentTripId = activeTrip.id;
+        window.currentTripId = currentTripId;
         completeBtn.classList.remove('d-none');
 
         // Items von API holen — jetzt hat der Server den neuesten Stand.
@@ -1121,6 +1125,7 @@ async function completeTrip() {
     try {
         await apiRequest(`/trips/${currentTripId}/archive`, 'POST');
         currentTripId = null;
+        window.currentTripId = currentTripId;
         showPage('trip-history');
     } catch (err) {}
 }
