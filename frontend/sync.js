@@ -34,8 +34,13 @@ async function updateLocalItemsAfterFlush(results) {
                     id: result.server_id,
                     updated_at: new Date().toISOString(),
                 });
+                // WICHTIG: ALTES Item unter client_id-Schlüssel LÖSCHEN.
+                // IndexedDB nutzt { keyPath: 'id' } – ein saveItem({id: server_id})
+                // erstellt ein NEUES Item unter server_id, löscht aber NICHT das
+                // alte Item unter client_id. Ohne dieses delete haben wir ein Duplikat.
+                await db.delete(db.STORES.ITEMS, result.client_id);
                 if (window.debugLog) {
-                    window.debugLog.info('SYNC', '🔄 Lokales Item (client_id=' + result.client_id + ') auf server_id=' + result.server_id + ' aktualisiert');
+                    window.debugLog.info('SYNC', '🔄 client_id=' + result.client_id + ' → server_id=' + result.server_id + ' (altes Item gelöscht)');
                 }
             }
         } catch (err) {
@@ -326,11 +331,52 @@ async function handleLocalChange(entity, operation, entityId, changeData) {
                 if (operation === 'delete') {
                     await db.deleteItem(entityId);
                 } else if (changeData) {
-                    const existing = await db.get(db.STORES.ITEMS, entityId);
+                    // Erst nach server_id suchen
+                    let existing = await db.get(db.STORES.ITEMS, entityId);
+                    // Fallback: wenn nicht gefunden, nach client_id suchen
+                    // (wichtig für optimistisch erstellte Items, die mit client_id als id gespeichert sind)
+                    let oldClientId = null;
+                    if (!existing && changeData.client_id) {
+                        const allItems = await db.getAllItems();
+                        existing = allItems.find(i => i.client_id === changeData.client_id);
+                        if (existing) {
+                            oldClientId = existing.id; // Speichere alten Schlüssel zum Löschen
+                            if (window.debugLog) {
+                                window.debugLog.info('SSE', '🔗 SSE item (server_id=' + entityId + ') über client_id=' + changeData.client_id + ' gematcht (alter Schlüssel=' + oldClientId + ')');
+                            }
+                        }
+                    }
                     if (existing) {
-                        await db.put(db.STORES.ITEMS, { ...existing, ...changeData, updated_at: changeData.updated_at || existing.updated_at });
+                        // Bestehendes Item aktualisieren (ersetzt client_id mit server_id)
+                        await db.saveItem({
+                            ...existing,
+                            id: entityId,  // server_id verwenden
+                            client_id: changeData.client_id,
+                            name: changeData.name,
+                            trip_id: changeData.trip_id,
+                            area_id: changeData.area_id,
+                            product_id: changeData.product_id,
+                            is_checked: changeData.is_checked,
+                            sort_order: changeData.sort_order,
+                            updated_at: changeData.updated_at || new Date().toISOString(),
+                        });
+                        // ALTES Item unter altem Schlüssel LÖSCHEN
+                        if (oldClientId && oldClientId !== entityId) {
+                            await db.delete(db.STORES.ITEMS, oldClientId);
+                        }
+                        if (window.debugLog) {
+                            window.debugLog.info('SSE', '✅ SSE item aktualisiert: ' + (changeData.client_id || entityId));
+                        }
                     } else {
-                        await db.put(db.STORES.ITEMS, changeData);
+                        // Neues Item von anderem Client (nicht gefunden)
+                        await db.saveItem({
+                            ...changeData,
+                            trip_id: changeData.trip_id,
+                            account_id: changeData.account_id,
+                        });
+                        if (window.debugLog) {
+                            window.debugLog.info('SSE', '➕ Neues SSE item gespeichert: ' + entityId);
+                        }
                     }
                 }
                 break;
@@ -385,7 +431,11 @@ async function fetchFreshTrip() {
         // So gehen lokale Changes nicht verloren wenn der Server den PATCH
         // noch nicht verarbeitet hat (Race Condition nach Queue-Flush).
         for (const serverItem of serverItems) {
-            const localItem = localItems.find(li => li.id === serverItem.id);
+            // Suche zuerst nach server_id, dann nach client_id
+            let localItem = localItems.find(li => li.id === serverItem.id);
+            if (!localItem && serverItem.client_id) {
+                localItem = localItems.find(li => li.client_id === serverItem.client_id);
+            }
             if (localItem) {
                 // Nur überschreiben wenn Server-Version jünger ist
                 const serverTime = new Date(serverItem.updated_at).getTime();
