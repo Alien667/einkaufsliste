@@ -107,6 +107,13 @@ def create_list_item(db: Session, item: schemas.ShoppingListItemCreate, account_
     db.refresh(db_item)
     return db_item
 
+
+def get_item_by_client_id(db: Session, client_id: str, account_id: int):
+    return db.query(models.ShoppingListItem).filter(
+        models.ShoppingListItem.client_id == client_id,
+        models.ShoppingListItem.account_id == account_id
+    ).first()
+
 def get_items_for_trip(db: Session, trip_id: int, account_id: int):
     return db.query(models.ShoppingListItem).filter(models.ShoppingListItem.trip_id == trip_id, models.ShoppingListItem.account_id == account_id).order_by(models.ShoppingListItem.sort_order).all()
 

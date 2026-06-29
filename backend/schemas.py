@@ -83,6 +83,7 @@ class ShoppingListItemBase(BaseModel):
 
 class ShoppingListItemCreate(ShoppingListItemBase):
     trip_id: int
+    client_id: Optional[str] = None
 
 class ShoppingListItem(ShoppingListItemBase):
     id: int
@@ -90,6 +91,7 @@ class ShoppingListItem(ShoppingListItemBase):
     product_id: Optional[int] = None
     area_id: Optional[int] = None
     account_id: int
+    client_id: Optional[str] = None
     updated_at: datetime
 
     class Config:

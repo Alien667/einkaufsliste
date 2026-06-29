@@ -711,8 +711,10 @@ function applyPatches() {
                     }
                 }
 
+                // Stabile UUID als client_id (und lokaler id) – wird vom Server gemapped
+                const clientId = crypto.randomUUID();
                 const newItem = {
-                    id: Date.now(),
+                    id: clientId,
                     trip_id: currentTripId,
                     name: name,
                     sort_order: 0,
@@ -720,14 +722,15 @@ function applyPatches() {
                     area_id: area_id,
                     product_id: null,
                     account_id: accountId,
+                    client_id: clientId,
                     updated_at: new Date().toISOString(),
                 };
 
                 await db.saveItem(newItem);
                 if (window.sync) {
-                    window.sync.queueOperation('items', 'create', newItem, newItem.id);
+                    window.sync.queueOperation('items', 'create', newItem, clientId);
                 }
-                if (window.debugLog) window.debugLog.info('CACHE', '✅ Item "' + name + '" lokal erstellt (optimistisch)');
+                if (window.debugLog) window.debugLog.info('CACHE', '✅ Item "' + name + '" lokal erstellt (optimistisch, client_id=' + clientId + ')');
 
                 // UI vorbereiten
                 document.getElementById('spontNameInput').value = '';
@@ -744,15 +747,34 @@ function applyPatches() {
                 return;
             }
 
-            // Dann Originalaufruf (für API-Sync)
+            // queueOperation startet flushQueue() sofort (async).
+            // Der flushQueue erstellt das Item auf dem Server.
+            // origSaveSpontaneousProduct würde es DOPPELT erstellen (über queue + POST).
+            // Daher: auf flush warten, dann direkt rendern – KEIN origSaveSpontaneousProduct!
             try {
-                return await origSaveSpontaneousProduct();
-            } catch (err) {
-                // API-Fehler: lokale Erstellung bleibt, aber neu rendern aus Cache
-                if (window.debugLog) window.debugLog.warn('CACHE', 'API-Fehler beim Erstellen, lokal bleibt erstellt');
-                // Neu rendern mit Cache-Daten
-                if (window.loadCurrentTrip) {
-                    await window.loadCurrentTrip();
+                if (window.sync && window.sync.waitForFlush) {
+                    if (window.debugLog) window.debugLog.info('CACHE', '⏳ Warte auf flushQueue...');
+                    await window.sync.waitForFlush();
+                    if (window.debugLog) window.debugLog.info('CACHE', '✅ flushQueue abgeschlossen – Item jetzt auf Server');
+                    // Direkt neu rendern – kein origSaveSpontaneousProduct aufrufen
+                    // (verhindert doppeltes POST auf dem Server)
+                    if (window.loadCurrentTrip) {
+                        if (window.debugLog) window.debugLog.info('CACHE', '🔄 Rufe loadCurrentTrip auf...');
+                        await window.loadCurrentTrip();
+                        if (window.debugLog) window.debugLog.info('CACHE', '✅ loadCurrentTrip abgeschlossen');
+                    } else {
+                        console.warn('CACHE: window.loadCurrentTrip ist undefined!');
+                    }
+                }
+            } catch (flushErr) {
+                console.error('flushQueue error:', flushErr);
+                if (window.debugLog) window.debugLog.warn('CACHE', 'flushQueue fehlgeschlagen, versuche origSaveSpontaneousProduct');
+                try {
+                    await origSaveSpontaneousProduct();
+                } catch (err) {
+                    if (window.loadCurrentTrip) {
+                        await window.loadCurrentTrip();
+                    }
                 }
             }
         };

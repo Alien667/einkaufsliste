@@ -446,12 +446,20 @@ def create_item(
     current_user: auth_models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # Accept optional _client_id from client (UUID v4) for optimistic sync
+    client_id = getattr(item, 'client_id', None)
     db_item = crud.create_list_item(db, item, current_user.account_id)
+    # Store client_id if provided
+    if client_id:
+        db_item.client_id = client_id
+        db.commit()
+        db.refresh(db_item)
     _broadcast_change(current_user.account_id, "items", db_item.id, "create", {
         "id": db_item.id, "trip_id": db_item.trip_id, "name": db_item.name,
         "sort_order": db_item.sort_order,
         "is_checked": db_item.is_checked, "product_id": db_item.product_id,
         "area_id": db_item.area_id, "account_id": db_item.account_id,
+        "client_id": db_item.client_id,
         "updated_at": db_item.updated_at.isoformat() if db_item.updated_at else None,
     })
     return db_item
@@ -689,6 +697,7 @@ async def sync_operations(
                     "op_id": op_id,
                     "status": "ok",
                     "server_id": new_item.id,
+                    "client_id": new_item.client_id,
                     "server_updated_at": new_item.updated_at.isoformat()
                 })
 
@@ -699,6 +708,11 @@ async def sync_operations(
                     models.ShoppingListItem.id == entity_id,
                     models.ShoppingListItem.account_id == account_id
                 ).first()
+                # Fallback: try to find by client_id if not found by id
+                if not existing:
+                    client_id_val = data.get("client_id")
+                    if client_id_val:
+                        existing = crud.get_item_by_client_id(db, client_id_val, account_id)
                 if existing:
                     # Check if server is newer than client
                     client_updated_at_str = data.get("_client_updated_at")
@@ -741,10 +755,15 @@ async def sync_operations(
                     models.ShoppingListItem.id == entity_id,
                     models.ShoppingListItem.account_id == account_id
                 ).first()
+                # Fallback: try to find by client_id if not found by id
+                if not existing:
+                    client_id_val = data.get("client_id")
+                    if client_id_val:
+                        existing = crud.get_item_by_client_id(db, client_id_val, account_id)
                 if existing:
                     db.delete(existing)
                     db.commit()
-                    _broadcast_change(account_id, "items", entity_id, "delete", None)
+                    _broadcast_change(account_id, "items", existing.id, "delete", None)
                     results.append({
                         "op_id": op_id,
                         "status": "ok"
@@ -974,6 +993,7 @@ def _item_to_dict(item):
         "product_id": item.product_id,
         "area_id": item.area_id,
         "account_id": item.account_id,
+        "client_id": item.client_id,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
     }
     return d

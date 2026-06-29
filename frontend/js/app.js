@@ -1042,26 +1042,26 @@ async function loadCurrentTrip() {
     }
 }
 
+// Expose globally so cache-layer wrapper can call it
+window.loadCurrentTrip = loadCurrentTrip;
+
 /**
  * Hintergrund-Sync: Holt aktuelle Daten vom Server und aktualisiert den Cache.
  * Wird nach dem sofortigen Cache-Render gestartet – blockiert die UI nicht.
+ * Hinweis: client_id → server_id Mapping erfolgt in sync.updateLocalItemsAfterFlush().
  */
 async function syncCurrentTripInBg(completeBtn, container) {
     const previousTripId = currentTripId;
     try {
-        // Zuerst pending ops auf Server pushen, damit der Server den
-        // neuesten Zustand liefert und wir nicht lokale Änderungen
-        // durch veraltete Server-Daten überschreiben.
+        // Zuerst pending ops auf Server pushen
         if (window.sync?.flushQueue) {
             await window.sync.flushQueue();
         }
 
-        // Aktuellen Trip von API holen
         const apiTrips = await apiRequest('/trips');
         const activeTrip = apiTrips?.find(t => !t.is_archived);
 
         if (!activeTrip) {
-            // Trip wurde zwischenzeitlich archiviert
             if (previousTripId) {
                 completeBtn.classList.add('d-none');
             }
@@ -1072,14 +1072,12 @@ async function syncCurrentTripInBg(completeBtn, container) {
         window.currentTripId = currentTripId;
         completeBtn.classList.remove('d-none');
 
-        // Items von API holen — jetzt hat der Server den neuesten Stand.
         const apiItems = await apiRequest(`/items/trip/${activeTrip.id}`);
         renderItems(apiItems);
         updateOpenCountBadge(apiItems);
     } catch (err) {
-        // Still silently failed – UI zeigt bereits Cache-Daten
         if (window.debugLog) {
-            window.debugLog.warn('SYNC-BG', 'Hintergrund-Sync für aktuellen Trip fehlgeschlagen: ' + err.message);
+            window.debugLog.warn('SYNC-BG', 'Hintergrund-Sync fehlgeschlagen: ' + err.message);
         }
     }
 }

@@ -12,6 +12,37 @@ let operationQueue = [];
 let isSyncing = false;
 let lastSyncTimestamp = null;
 let pendingConflicts = [];
+// Map server_id → client_id for item sync (from sync/operations response)
+let serverIdToClientId = {};
+// Map client_id → server item data (from SSE or sync response)
+let pendingServerItems = {};
+
+// --- Helper: Update local items after successful flush ---
+async function updateLocalItemsAfterFlush(results) {
+    if (!db._db) return;
+
+    for (const result of results) {
+        if (result.status !== 'ok' || !result.server_id || !result.client_id) continue;
+
+        try {
+            // Item mit client_id aus IndexedDB holen
+            const localItem = await db.get(db.STORES.ITEMS, result.client_id);
+            if (localItem) {
+                // Item mit Server-Daten aktualisieren (echte id statt client_id)
+                await db.saveItem({
+                    ...localItem,
+                    id: result.server_id,
+                    updated_at: new Date().toISOString(),
+                });
+                if (window.debugLog) {
+                    window.debugLog.info('SYNC', '🔄 Lokales Item (client_id=' + result.client_id + ') auf server_id=' + result.server_id + ' aktualisiert');
+                }
+            }
+        } catch (err) {
+            console.warn('updateLocalItemsAfterFlush failed for client_id=' + result.client_id, err);
+        }
+    }
+}
 
 // --- Event listeners ---
 const listeners = new Map();
@@ -61,6 +92,8 @@ function updateOnlineStatus(online) {
 }
 
 // --- Operation Queue ---
+let _flushPromise = null; // Promise des laufenden flushQueue
+
 function queueOperation(entity, operation, data, entityId) {
     const op = {
         op_id: crypto.randomUUID(),
@@ -80,10 +113,23 @@ function queueOperation(entity, operation, data, entityId) {
 
     // Try to sync immediately if online
     if (isConnected && !isSyncing) {
-        flushQueue();
+        _flushPromise = flushQueue();
     }
 
     return op;
+}
+
+// Wartet darauf, dass der aktuelle flushQueue abgeschlossen ist
+function waitForFlush() {
+    if (_flushPromise) {
+        return _flushPromise;
+    }
+    // Wenn gerade kein flush läuft, aber noch ops da sind, flush starten
+    if (operationQueue.length > 0 && isConnected && !isSyncing) {
+        _flushPromise = flushQueue();
+        return _flushPromise;
+    }
+    return Promise.resolve();
 }
 
 async function flushQueue() {
@@ -146,11 +192,23 @@ async function flushQueue() {
                     clientData: batch.find(b => b.op_id === resultItem.op_id)?.data,
                 });
             }
+            // Track server_id → client_id mapping for items
+            if (resultItem.status === 'ok' && resultItem.server_id && resultItem.client_id) {
+                serverIdToClientId[resultItem.server_id] = resultItem.client_id;
+                if (window.debugLog) {
+                    window.debugLog.info('SYNC', '🗺️ server_id=' + resultItem.server_id + ' → client_id=' + resultItem.client_id);
+                }
+            }
         });
 
         if (window.debugLog) {
             window.debugLog.success('SYNC', '✅ ' + batch.length + ' Operationen erfolgreich synchronisiert');
         }
+
+        // Nach erfolgreichem Flush: lokale Items mit Server-Daten aktualisieren
+        // (ersetzt die alte temp-ID → real-ID Mapping-Logik)
+        await updateLocalItemsAfterFlush(result.results);
+
         emit('sync:flush-complete', { processed: batch.length });
     } catch (error) {
         if (window.debugLog) {
@@ -516,6 +574,7 @@ async function initSync() {
         queueOperation,
         fullSync,
         flushQueue,
+        waitForFlush,
         on,
         updateBadge(online) {
             updateOnlineStatus(online);

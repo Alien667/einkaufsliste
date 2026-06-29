@@ -21,6 +21,7 @@ def init_db():
     _migrate_updated_at()
     _migrate_sort_order()
     _migrate_selected_product_ids()
+    _migrate_client_id()
 
 
 def _migrate_updated_at():
@@ -82,6 +83,24 @@ def _migrate_selected_product_ids():
         if "selected_product_ids" not in col_names:
             session.execute(
                 text("ALTER TABLE {} ADD COLUMN selected_product_ids TEXT".format(table))
+            )
+            session.commit()
+    finally:
+        session.close()
+
+
+def _migrate_client_id():
+    """Add `client_id` column to shopping_list_items if missing."""
+    session = SessionLocal()
+    try:
+        table = "shopping_list_items"
+        col_names = [r[1] for r in session.execute(
+            text("PRAGMA table_info({})".format(table))
+        ).fetchall()]
+
+        if "client_id" not in col_names:
+            session.execute(
+                text("ALTER TABLE {} ADD COLUMN client_id VARCHAR(36)".format(table))
             )
             session.commit()
     finally:

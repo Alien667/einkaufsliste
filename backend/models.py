@@ -52,6 +52,9 @@ class ShoppingListItem(Base):
     # Link to area (can be used for spontaneous items)
     area_id = Column(Integer, ForeignKey("areas.id"), nullable=True)
 
+    # Client-side identifier for optimistic sync (UUID v4)
+    client_id = Column(String(36), nullable=True, unique=True, index=True)
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     trip = relationship("ShoppingTrip", back_populates="items")
     product = relationship("Product")
